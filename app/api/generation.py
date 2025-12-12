@@ -1,141 +1,162 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Request, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import Optional
-from pathlib import Path
-from app.database import get_db
-from app.models.template import Template
-from app.models.user import User, AuthProvider
-from app.schemas.template import TemplateCreate, TemplateUpdate, TemplateResponse
-from app.schemas.auth import LoginRequest, TokenResponse
-from app.utils.dependencies import get_current_admin
-from app.services.storage_service import StorageService
-from app.services.auth_service import AuthService
-from app.config import settings
+from typing import Optional, List
 from datetime import datetime
-import uuid
+from app.database import get_db
+from app.models.generation import Generation, GenerationStatus, GenerationMode
+from app.models.template import Template
+from app.models.user import User
+from app.models.payment_token import PaymentToken
+from app.schemas.generation import GenerationResponse, GenerationListResponse
+from app.utils.dependencies import get_current_user
+from app.services.storage_service import StorageService
+from app.services.image_generation_service import ImageGenerationService
+from app.services.payment_service import PaymentService
+from pathlib import Path
+import logging
 
-router = APIRouter(prefix="/api/admin", tags=["Admin"])
+router = APIRouter(prefix="/api/generate", tags=["Image Generation"])
+logger = logging.getLogger(__name__)
 
-# ============= ADMIN LOGIN =============
-@router.post("/login", response_model=TokenResponse)
-async def admin_login(
-    login_data: LoginRequest,
-    db: Session = Depends(get_db)
+async def process_generation(
+    generation_id: int,
+    generation_mode: GenerationMode,
+    user_images: Optional[List[str]],
+    partner_images: Optional[List[str]],
+    couple_image_path: Optional[str],
+    prompt: str,
+    add_watermark: bool,
 ):
-    """Admin login endpoint - only for users with is_admin=True"""
+    """Background task to process image generation"""
+    from app.database import SessionLocal
+    db_session = SessionLocal()
+    generation = None
     
-    # Authenticate user
-    user = AuthService.authenticate_user(db, login_data.email, login_data.password)
-    
-    # Check if user is admin
-    if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Admin privileges required."
-        )
-    
-    # Create access token
-    access_token = AuthService.create_token(user)
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "is_admin": user.is_admin
-        }
-    }
-
-# ============= TEMPLATE MANAGEMENT =============
-@router.post("/templates", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
-async def create_template(
-    name: str = Form(...),
-    description: str = Form(...),
-    prompt: str = Form(...),
-    is_free: bool = Form(False),
-    display_order: int = Form(0),
-    price: Optional[float] = Form(0.0),           # ← ADD THIS
-    currency: Optional[str] = Form("INR"),
-    preview_image: Optional[UploadFile] = File(None),
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Create a new template with optional preview image (Admin only)"""
-    
-    print(f"Creating template: name={name}, description={description}, prompt={prompt}")
-    
-    # Check if template name already exists
-    existing = db.query(Template).filter(Template.name == name).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Template with this name already exists"
-        )
-    
-    # Handle preview image upload
-    preview_image_path = None
-    if preview_image and preview_image.filename:
-        try:
-            StorageService.validate_image_file(preview_image)
-            preview_image_path = await StorageService.save_upload_file(
-                preview_image, 
-                settings.TEMPLATE_PREVIEW_DIR
-            )
-            print(f"Saved preview image: {preview_image_path}")
-        except Exception as e:
-            print(f"Error saving preview image: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to save preview image: {str(e)}"
-            )
-    
-    # Create template
     try:
-        template = Template(
-            name=name,
-            description=description,
+        logger.info(f"🔄 Processing generation {generation_id} - Mode: {generation_mode}")
+        
+        # Get generation
+        generation = db_session.query(Generation).filter(Generation.id == generation_id).first()
+        if not generation:
+            logger.error(f"❌ Generation {generation_id} not found")
+            return
+        
+        # Update status
+        generation.status = GenerationStatus.PROCESSING
+        db_session.commit()
+        
+        # ============================================
+        # FIX: Verify files exist (S3 + Local support)
+        # ============================================
+        if generation_mode == GenerationMode.FLEXIBLE:
+            for i, path in enumerate(user_images, 1):
+                if not StorageService.file_exists(path):  # ← FIXED
+                    raise FileNotFoundError(f"User image {i} not found: {path}")
+                logger.debug(f"✓ User image {i} validated: {path}")
+                
+            for i, path in enumerate(partner_images, 1):
+                if not StorageService.file_exists(path):  # ← FIXED
+                    raise FileNotFoundError(f"Partner image {i} not found: {path}")
+                logger.debug(f"✓ Partner image {i} validated: {path}")
+        
+        elif generation_mode == GenerationMode.COUPLE:
+            if not StorageService.file_exists(couple_image_path):  # ← FIXED
+                raise FileNotFoundError(f"Couple image not found: {couple_image_path}")
+            logger.debug(f"✓ Couple image validated: {couple_image_path}")
+        
+        # Generate image
+        logger.info(f"🎨 Starting image generation...")
+        image_service = ImageGenerationService()
+        generated_path, watermarked_path = await image_service.generate_image(
+            generation_mode=generation_mode,
+            user_images=user_images,
+            partner_images=partner_images,
+            couple_image_path=couple_image_path,
             prompt=prompt,
-            preview_image=preview_image_path,
-            is_free=is_free,
-            display_order=display_order,
-            price=price,                 # ← ADD THIS
-            currency=currency
+            add_watermark=add_watermark
         )
         
-        db.add(template)
-        db.commit()
-        db.refresh(template)
+        logger.info(f"✅ Generation complete!")
         
-        print(f"Template created successfully: {template.id}")
-        return template
+        # Update generation record
+        generation.generated_image_path = generated_path
+        generation.watermarked_image_path = watermarked_path
+        generation.status = GenerationStatus.COMPLETED
+        generation.completed_at = datetime.utcnow()
+        generation.has_watermark = add_watermark
+        
+        # Mark payment token as used (if paid generation)
+        if generation.payment_token_id:
+            token = db_session.query(PaymentToken).filter(
+                PaymentToken.id == generation.payment_token_id
+            ).first()
+            if token:
+                token.mark_as_used()
+        
+        db_session.commit()
+        logger.info(f"✅ Generation {generation_id} completed successfully")
+        
     except Exception as e:
-        db.rollback()
-        print(f"Error creating template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create template: {str(e)}"
-        )
+        logger.error(f"❌ Generation {generation_id} failed: {str(e)}")
+        logger.exception("Full traceback:")
+        
+        # Update with error
+        if generation:
+            generation.status = GenerationStatus.FAILED
+            generation.error_message = str(e)
+            db_session.commit()
+            
+            # REFUND if paid generation failed
+            if generation.payment_token_id:
+                try:
+                    PaymentService.refund_payment(
+                        generation.payment_token_id,
+                        f"Generation failed: {str(e)}",
+                        db_session
+                    )
+                    logger.info(f"💰 Payment refunded for failed generation")
+                except Exception as refund_error:
+                    logger.error(f"❌ Refund failed: {str(refund_error)}")
+    
+    finally:
+        db_session.close()
 
-@router.put("/templates/{template_id}", response_model=TemplateResponse)
-async def update_template(
-    template_id: int,
-    name: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    prompt: Optional[str] = Form(None),
-    is_free: Optional[bool] = Form(None),
-    price: Optional[float] = Form(None),         # ← ADD THIS
-    currency: Optional[str] = Form(None),        # ← ADD THIS
-    display_order: Optional[int] = Form(None),
-    is_active: Optional[bool] = Form(None),
-    preview_image: Optional[UploadFile] = File(None),
-    current_admin: User = Depends(get_current_admin),
+
+@router.post("/", response_model=GenerationResponse, status_code=status.HTTP_201_CREATED)
+async def create_generation(
+    request: Request,
+    template_id: int = Form(...),
+    generation_mode: str = Form(...),  # "flexible" or "couple"
+    
+    # Mode 1: FLEXIBLE (1-3 images per person)
+    user_images: List[UploadFile] = File(None),
+    partner_images: List[UploadFile] = File(None),
+    
+    # Mode 2: COUPLE (1 image with both)
+    couple_image: Optional[UploadFile] = File(None),
+    
+    background_tasks: BackgroundTasks = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update a template (Admin only)"""
+    """
+    Create a new image generation request with support for 2 modes:
     
+    - FLEXIBLE: 1-3 user images + 1-3 partner images (auto-detect count)
+    - COUPLE: 1 image with both people together
+    """
+    
+    # Validate generation mode
+    try:
+        mode = GenerationMode(generation_mode.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid generation mode. Must be: 'flexible' or 'couple'"
+        )
+    
+    # Get template
     template = db.query(Template).filter(Template.id == template_id).first()
     if not template:
         raise HTTPException(
@@ -143,346 +164,359 @@ async def update_template(
             detail="Template not found"
         )
     
-    # Update fields
-    if name is not None:
-        template.name = name
-    if description is not None:
-        template.description = description
-    if prompt is not None:
-        template.prompt = prompt
-    if is_free is not None:
-        template.is_free = is_free
-    if display_order is not None:
-        template.display_order = display_order
-    if is_active is not None:
-        template.is_active = is_active
-        
-    if price is not None:         # ← ADD THIS
-        template.price = price
-    if currency is not None:      # ← ADD THIS
-        template.currency = currency
+    # ============================================
+    # ACCESS CONTROL
+    # ============================================
+    payment_token_id = None
+    used_free_credit = False
+    used_paid_token = False
     
-    # Handle preview image update
-    if preview_image and preview_image.filename:
-        # Delete old preview if exists
-        if template.preview_image:
-            try:
-                StorageService.delete_file(template.preview_image)
-            except Exception as e:
-                print(f"Error deleting old preview: {e}")
-        
-        # Upload new preview
-        try:
-            StorageService.validate_image_file(preview_image)
-            new_preview_path = await StorageService.save_upload_file(
-                preview_image,
-                settings.TEMPLATE_PREVIEW_DIR
+    if template.is_free:
+        if not current_user.can_generate_with_free_template():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "insufficient_credits",
+                    "message": "No free credits remaining.",
+                    "free_credits_remaining": current_user.free_credits_remaining
+                }
             )
-            template.preview_image = new_preview_path
-        except Exception as e:
+        
+        if not current_user.deduct_free_credit():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Failed to deduct credit"
+            )
+        
+        used_free_credit = True
+        logger.info(f"💳 FREE: Credit deducted. User {current_user.id} has {current_user.free_credits_remaining} credits")
+        
+    else:
+        if not current_user.can_generate_with_paid_template(template_id):
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "error": "payment_required",
+                    "message": f"Payment required for template: {template.name}",
+                    "template_price": float(template.price)
+                }
+            )
+        
+        token = current_user.get_unused_token_for_template(template_id)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="No valid payment token found"
+            )
+        
+        payment_token_id = token.id
+        used_paid_token = True
+        logger.info(f"💳 PAID: Using token {token.id}")
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    # ============================================
+    # VALIDATE & SAVE IMAGES BASED ON MODE
+    # ============================================
+    
+    user_images_paths = None
+    partner_images_paths = None
+    couple_image_path = None
+    
+    if mode == GenerationMode.FLEXIBLE:
+        # Validate: Must have at least 1 user image and 1 partner image
+        if not user_images or len(user_images) == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to save preview image: {str(e)}"
+                detail="At least 1 user image is required for FLEXIBLE mode"
             )
+        
+        if not partner_images or len(partner_images) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least 1 partner image is required for FLEXIBLE mode"
+            )
+        
+        # Validate: Maximum 3 images per person
+        if len(user_images) > 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 3 user images allowed"
+            )
+        
+        if len(partner_images) > 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 3 partner images allowed"
+            )
+        
+        # Save user images
+        user_images_paths = []
+        for i, file in enumerate(user_images, 1):
+            StorageService.validate_image_file(file)
+            path = await StorageService.save_upload_file(file, "uploads")
+            user_images_paths.append(path)
+            logger.info(f"   Saved user image {i}: {path}")
+        
+        # Save partner images
+        partner_images_paths = []
+        for i, file in enumerate(partner_images, 1):
+            StorageService.validate_image_file(file)
+            path = await StorageService.save_upload_file(file, "uploads")
+            partner_images_paths.append(path)
+            logger.info(f"   Saved partner image {i}: {path}")
+        
+        logger.info(f"📸 FLEXIBLE mode: {len(user_images_paths)} user + {len(partner_images_paths)} partner images")
     
-    try:
-        db.commit()
-        db.refresh(template)
-        return template
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update template: {str(e)}"
-        )
-
-@router.delete("/templates/{template_id}")
-async def delete_template(
-    template_id: int,
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Archive a template (Admin only) - Soft delete to archive"""
+    elif mode == GenerationMode.COUPLE:
+        # Validate: Must have couple_image
+        if not couple_image:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="couple_image is required for COUPLE mode"
+            )
+        
+        StorageService.validate_image_file(couple_image)
+        couple_image_path = await StorageService.save_upload_file(couple_image, "uploads")
+        logger.info(f"📸 COUPLE mode: {couple_image_path}")
     
-    template = db.query(Template).filter(Template.id == template_id).first()
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found"
-        )
+    # Watermark logic
+    add_watermark = not template.is_free and not current_user.is_subscribed
     
-    # Check if already archived
-    if template.is_archived:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Template is already archived"
-        )
+    # ============================================
+    # CREATE GENERATION RECORD
+    # ============================================
     
-    # Archive the template
-    template.is_archived = True
-    template.archived_at = datetime.utcnow()
-    template.is_active = False  # Also deactivate
+    generation = Generation(
+        user_id=current_user.id,
+        template_id=template_id,
+        payment_token_id=payment_token_id,
+        generation_mode=mode,
+        
+        # Mode 1: FLEXIBLE
+        user_images=user_images_paths,
+        partner_images=partner_images_paths,
+        
+        # Mode 2: COUPLE
+        couple_image_path=couple_image_path,
+        
+        status=GenerationStatus.PENDING,
+        has_watermark=add_watermark,
+        used_free_credit=used_free_credit,
+        used_paid_token=used_paid_token
+    )
     
-    try:
-        db.commit()
-        return {
-            "message": "Template archived successfully",
-            "template_id": template_id,
-            "archived_at": template.archived_at
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to archive template: {str(e)}"
-        )
-
-@router.post("/templates/{template_id}/restore")
-async def restore_template(
-    template_id: int,
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Restore an archived template (Admin only)"""
+    db.add(generation)
+    db.commit()
+    db.refresh(generation)
     
-    template = db.query(Template).filter(Template.id == template_id).first()
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found"
-        )
-    
-    if not template.is_archived:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Template is not archived"
-        )
-    
-    # Restore the template
-    template.is_archived = False
-    template.archived_at = None
-    template.is_active = True  # Reactivate
-    
-    try:
-        db.commit()
-        db.refresh(template)
-        return {
-            "message": "Template restored successfully",
-            "template": template
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to restore template: {str(e)}"
-        )
-
-@router.delete("/templates/{template_id}/permanent")
-async def permanently_delete_template(
-    template_id: int,
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Permanently delete a template (Admin only) - Can only delete archived templates"""
-    
-    template = db.query(Template).filter(Template.id == template_id).first()
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found"
-        )
-    
-    # Only allow permanent deletion of archived templates
-    if not template.is_archived:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Template must be archived before permanent deletion. Archive it first."
-        )
-    
-    # Delete preview image if exists
-    if template.preview_image:
-        try:
-            StorageService.delete_file(template.preview_image)
-        except Exception as e:
-            print(f"Error deleting preview image: {e}")
-    
-    # Permanently delete from database
-    try:
-        db.delete(template)
-        db.commit()
-        return {
-            "message": "Template permanently deleted",
-            "template_id": template_id
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to permanently delete template: {str(e)}"
-        )
-
-@router.get("/templates/all")
-async def get_all_templates_admin(
-    include_inactive: bool = False,
-    show_archived: bool = False,
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Get all templates (Admin only) - Excludes archived by default"""
-    
-    query = db.query(Template)
-    
-    # By default, exclude archived templates
-    if not show_archived:
-        query = query.filter(Template.is_archived == False)
-    
-    # Filter by active status
-    if not include_inactive and not show_archived:
-        query = query.filter(Template.is_active == True)
-    
-    templates = query.order_by(Template.display_order).all()
-    
-    # Add full URL for preview images
-    templates_data = []
-    for template in templates:
-        template_dict = {
-            "id": template.id,
-            "name": template.name,
-            "description": template.description,
-            "prompt": template.prompt,
-            "preview_image": template.preview_image,
-            "preview_url": StorageService.get_file_url(template.preview_image) if template.preview_image else None,
-            "is_free": template.is_free,
-            "is_active": template.is_active,
-            "price":template.price,
-            "currency":template.currency,
-            "is_archived": template.is_archived,
-            "archived_at": template.archived_at,
-            "display_order": template.display_order,
-            "usage_count": template.usage_count,
-            "created_at": template.created_at,
-            "updated_at": template.updated_at
-        }
-        templates_data.append(template_dict)
-    
-    return {
-        "templates": templates_data,
-        "total": len(templates_data)
-    }
-
-@router.get("/templates/archived")
-async def get_archived_templates(
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Get all archived templates (Admin only)"""
-    
-    templates = db.query(Template).filter(
-        Template.is_archived == True
-    ).order_by(Template.archived_at.desc()).all()
-    
-    # Add full URL for preview images
-    templates_data = []
-    for template in templates:
-        template_dict = {
-            "id": template.id,
-            "name": template.name,
-            "description": template.description,
-            "prompt": template.prompt,
-            "preview_image": template.preview_image,
-            "preview_url": StorageService.get_file_url(template.preview_image) if template.preview_image else None,
-            "is_free": template.is_free,
-            "is_active": template.is_active,
-            "price":template.price,
-            "currency":template.currency,
-            "is_archived": template.is_archived,
-            "archived_at": template.archived_at,
-            "display_order": template.display_order,
-            "usage_count": template.usage_count,
-            "created_at": template.created_at,
-            "updated_at": template.updated_at
-        }
-        templates_data.append(template_dict)
-    
-    return {
-        "templates": templates_data,
-        "total": len(templates_data)
-    }
-
-# ============= STATISTICS =============
-@router.get("/stats")
-async def get_admin_stats(
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Get admin dashboard statistics"""
-    from app.models.generation import Generation
-    
-    total_users = db.query(User).count()
-    total_generations = db.query(Generation).count()
-    total_templates = db.query(Template).filter(
-        Template.is_active == True,
-        Template.is_archived == False
-    ).count()
-    subscribed_users = db.query(User).filter(User.is_subscribed == True).count()
-    archived_templates = db.query(Template).filter(Template.is_archived == True).count()
-    
-    return {
-        "total_users": total_users,
-        "total_generations": total_generations,
-        "total_templates": total_templates,
-        "subscribed_users": subscribed_users,
-        "archived_templates": archived_templates
-    }
-
-# ============= USER MANAGEMENT =============
-@router.get("/users")
-async def get_all_users(
-    skip: int = 0,
-    limit: int = 100,
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Get all users (Admin only)"""
-    users = db.query(User).offset(skip).limit(limit).all()
-    return {
-        "users": users,
-        "total": db.query(User).count()
-    }
-
-@router.post("/users/{user_id}/grant-credits")
-async def grant_credits(
-    user_id: int,
-    credits: int,
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Grant credits to a user (Admin only)"""
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    user.credits_remaining += credits
+    # Update template usage
+    template.usage_count += 1
     db.commit()
     
+    # ============================================
+    # START BACKGROUND GENERATION
+    # ============================================
+    
+    background_tasks.add_task(
+        process_generation,
+        generation.id,
+        mode,
+        user_images_paths,
+        partner_images_paths,
+        couple_image_path,
+        template.prompt,
+        add_watermark
+    )
+    
+    # Return response
+    response = GenerationResponse.model_validate(generation)
+    response._request = request
+    return response
+
+
+@router.get("/", response_model=GenerationListResponse)
+async def get_user_generations(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all generations for current user"""
+    query = db.query(Generation).filter(Generation.user_id == current_user.id)
+    
+    generations = query.order_by(Generation.created_at.desc()).offset(skip).limit(limit).all()
+    total = query.count()
+    
+    generation_responses = []
+    for gen in generations:
+        response = GenerationResponse.model_validate(gen)
+        response._request = request
+        generation_responses.append(response)
+    
     return {
-        "message": f"Granted {credits} credits to user",
-        "user_id": user.id,
-        "user_email": user.email,
-        "new_balance": user.credits_remaining
+        "generations": generation_responses,
+        "total": total
     }
 
-# ============= ADMIN DASHBOARD PAGE =============
-@router.get("/dashboard", response_class=HTMLResponse)
-async def admin_dashboard():
-    """Serve the admin dashboard HTML page"""
-    dashboard_path = Path(__file__).parent.parent / "templates" / "admin_dashboard.html"
+
+@router.get("/{generation_id}", response_model=GenerationResponse)
+async def get_generation(
+    request: Request,
+    generation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific generation"""
+    generation = db.query(Generation).filter(
+        Generation.id == generation_id,
+        Generation.user_id == current_user.id
+    ).first()
     
-    if not dashboard_path.exists():
-        raise HTTPException(status_code=404, detail="Admin dashboard not found")
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Generation not found"
+        )
     
-    return FileResponse(dashboard_path)
+    response = GenerationResponse.model_validate(generation)
+    response._request = request
+    return response
+
+
+@router.get("/{generation_id}/status")
+async def get_generation_status(
+    request: Request,
+    generation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get generation status for polling"""
+    generation = db.query(Generation).filter(
+        Generation.id == generation_id,
+        Generation.user_id == current_user.id
+    ).first()
+    
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Generation not found"
+        )
+    
+    generated_image_url = None
+    if generation.status == GenerationStatus.COMPLETED:
+        image_path = generation.watermarked_image_path or generation.generated_image_path
+        generated_image_url = StorageService.get_file_url(image_path, request)
+    
+    return {
+        "id": generation.id,
+        "status": generation.status,
+        "generation_mode": generation.generation_mode,
+        "generated_image_url": generated_image_url,
+        "error_message": generation.error_message,
+        "used_free_credit": generation.used_free_credit,
+        "used_paid_token": generation.used_paid_token
+    }
+
+
+@router.get("/{generation_id}/download")
+async def download_generation(
+    generation_id: int,
+    include_watermark: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Download generated image"""
+    generation = db.query(Generation).filter(
+        Generation.id == generation_id,
+        Generation.user_id == current_user.id
+    ).first()
+    
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Generation not found"
+        )
+    
+    if generation.status != GenerationStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Generation is not completed yet. Current status: {generation.status}"
+        )
+    
+    # Determine which image to download
+    if include_watermark and generation.watermarked_image_path:
+        file_path = generation.watermarked_image_path
+        filename_suffix = "_watermarked"
+    elif generation.generated_image_path:
+        file_path = generation.generated_image_path
+        filename_suffix = ""
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Generated image not found"
+        )
+    
+    # Verify file exists
+    if not StorageService.file_exists(file_path):
+        logger.error(f"File not found on disk: {file_path}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image file not found on server"
+        )
+    
+    # Get template for filename
+    template = db.query(Template).filter(Template.id == generation.template_id).first()
+    template_name = template.name.replace(" ", "_") if template else "template"
+    
+    # Create download filename
+    file_extension = Path(file_path).suffix
+    download_filename = f"{template_name}_generation_{generation.id}{filename_suffix}{file_extension}"
+    
+    logger.info(f"📥 User {current_user.id} downloading generation {generation.id}: {download_filename}")
+    
+    return FileResponse(
+        path=file_path,
+        filename=download_filename,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f"attachment; filename={download_filename}"
+        }
+    )
+
+
+@router.delete("/{generation_id}")
+async def delete_generation(
+    generation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a generation and all associated files"""
+    generation = db.query(Generation).filter(
+        Generation.id == generation_id,
+        Generation.user_id == current_user.id
+    ).first()
+    
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Generation not found"
+        )
+    
+    # Delete all input files
+    for path in generation.get_all_input_image_paths():
+        StorageService.delete_file(path)
+    
+    # Delete output files
+    if generation.generated_image_path:
+        StorageService.delete_file(generation.generated_image_path)
+    if generation.watermarked_image_path:
+        StorageService.delete_file(generation.watermarked_image_path)
+    
+    # Delete record
+    db.delete(generation)
+    db.commit()
+    
+    return {"message": "Generation deleted successfully"}

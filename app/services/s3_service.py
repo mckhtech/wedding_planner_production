@@ -222,11 +222,17 @@ class S3Service:
                 Bucket=self.bucket_name,
                 Key=s3_key
             )
+            logger.debug(f"✓ S3 file exists: {s3_key}")
             return True
             
-        except ClientError:
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            logger.warning(f"S3 file not found: {file_url_or_path} (Error: {error_code})")
             return False
-    
+        except Exception as e:
+            logger.error(f"Error checking S3 file: {str(e)}")
+            return False
+        
     def _extract_s3_key(self, s3_url: str) -> str:
         """
         Extract S3 key from full S3 URL

@@ -10,6 +10,7 @@ from PIL import Image
 from typing import Optional, List, Tuple
 from app.models.generation import GenerationMode
 import io
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,15 @@ class ImageGenerationService:
         """
         # Handle S3 URLs
         if image_path.startswith('http'):
-            import requests
+            logger.debug(f"Loading image from S3: {image_path}")
             response = requests.get(image_path)
+            if response.status_code != 200:
+                raise Exception(f"Failed to download image from S3: {response.status_code}")
             img = Image.open(io.BytesIO(response.content))
             original_size = len(response.content) / (1024 * 1024)
         else:
             # Local file
+            logger.debug(f"Loading local image: {image_path}")
             path = Path(image_path)
             img = Image.open(path)
             original_size = path.stat().st_size / (1024 * 1024)
@@ -273,14 +277,20 @@ class ImageGenerationService:
     def _validate_file_exists(self, file_path: str, label: str):
         """Validate file exists (supports both local and S3)"""
         if file_path.startswith('http'):
-            # S3 URL - we'll validate on download
-            logger.debug(f"{label} image is S3 URL: {file_path}")
+            # S3 URL - validate by checking if we can access it
+            if not StorageService.file_exists(file_path):
+                raise FileNotFoundError(
+                    f"{label} image not found in S3: {file_path}. "
+                    "Check if file was uploaded successfully and bucket permissions are correct."
+                )
+            logger.debug(f"✓ {label} image validated in S3: {file_path}")
             return
         
         # Local path
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"{label} image not found at: {file_path}")
+        logger.debug(f"✓ {label} image validated locally: {file_path}")
     
     def _save_generated_image(self, response) -> str:
         """Save generated image locally (will be uploaded to S3 later if enabled)"""
@@ -299,11 +309,32 @@ class ImageGenerationService:
         generated_filename = f"{uuid.uuid4()}.png"
         generated_path = generated_dir / generated_filename
         
+        # Convert to PIL Image
         generated_image = part.as_image()
-        generated_image.save(str(generated_path))
         
-        # Log final dimensions
-        logger.info(f"💾 Image saved locally: {generated_path} ({generated_image.size})")
+        # If it's a PIL Image, save directly
+        if hasattr(generated_image, 'save'):
+            generated_image.save(str(generated_path))
+            # Now we can safely get the size
+            img_size = generated_image.size if hasattr(generated_image, 'size') else "unknown"
+            logger.info(f"💾 Image saved locally: {generated_path} (size: {img_size})")
+        else:
+            # If it's a Pydantic model, we need to get the PIL image differently
+            # Try to access the underlying PIL image
+            from PIL import Image as PILImage
+            import io
+            
+            # Get the image data
+            if hasattr(part.inline_data, 'data'):
+                img_data = part.inline_data.data
+                pil_img = PILImage.open(io.BytesIO(img_data))
+                pil_img.save(str(generated_path))
+                logger.info(f"💾 Image saved locally: {generated_path} (size: {pil_img.size})")
+            else:
+                # Fallback: just save without size info
+                generated_image.save(str(generated_path))
+                logger.info(f"💾 Image saved locally: {generated_path}")
+        
         return str(generated_path)
         
     def _add_watermark(self, image_path: str) -> str:
@@ -311,9 +342,9 @@ class ImageGenerationService:
         try:
             # Download from S3 if needed
             if image_path.startswith('http'):
-                import requests
                 import tempfile
                 
+                logger.debug(f"Downloading image from S3 for watermarking: {image_path}")
                 response = requests.get(image_path)
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
                     tmp.write(response.content)
@@ -349,7 +380,12 @@ class ImageGenerationService:
             logger.error(f"❌ Watermark addition failed: {str(e)}")
             return image_path
     
-    def _create_flexible_prompt(self, template_prompt: str, user_count: int, partner_count: int) -> str:
+    def _create_flexible_prompt(
+        self,
+        template_prompt: str,
+        user_count: int,
+        partner_count: int
+    ) -> str:
         """ULTRA-ENHANCED for pixel-perfect face matching"""
         
         # Build reference description
