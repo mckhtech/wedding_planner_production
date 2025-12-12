@@ -1,0 +1,14 @@
+.env
+*.pyc
+__pycache__/
+media/
+staticfiles/
+chroma_db/
+alembic
+venv/
+alembic.ini
+uploads/
+templates/
+template_previews/
+generated/
+instance/
