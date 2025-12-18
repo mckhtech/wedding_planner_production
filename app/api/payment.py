@@ -42,8 +42,11 @@ class TokenListResponse(BaseModel):
     currency: str
     status: str
     payment_status: str
+    uses_total: int  # NEW
+    uses_remaining: int  # NEW
     created_at: str
     used_at: Optional[str]
+    last_used_at: Optional[str]  # NEW
 
 
 @router.post("/create-order", response_model=PaymentOrderResponse)
@@ -180,7 +183,7 @@ async def get_my_tokens(
 ):
     """
     Get all payment tokens for current user
-    Shows purchase history and unused tokens
+    Shows purchase history and usage status
     """
     
     tokens = db.query(PaymentToken).filter(
@@ -198,15 +201,22 @@ async def get_my_tokens(
             "currency": token.currency,
             "status": token.status.value,
             "payment_status": token.payment_status.value,
+            "uses_total": token.uses_total,  # NEW
+            "uses_remaining": token.uses_remaining,  # NEW
             "created_at": token.created_at.isoformat(),
             "used_at": token.used_at.isoformat() if token.used_at else None,
-            "can_use": token.status == TokenStatus.UNUSED and token.payment_status == PaymentStatus.COMPLETED
+            "last_used_at": token.last_used_at.isoformat() if token.last_used_at else None,  # NEW
+            "can_use": token.can_be_used()  # NEW: Uses new method
         })
+    
+    # Calculate totals
+    total_uses_remaining = sum(t["uses_remaining"] for t in token_list if t["can_use"])
     
     return {
         "tokens": token_list,
-        "total": len(token_list),
-        "unused_tokens": len([t for t in token_list if t["can_use"]])
+        "total_tokens": len(token_list),
+        "total_uses_remaining": total_uses_remaining,  # NEW
+        "available_tokens": len([t for t in token_list if t["can_use"]])
     }
 
 
@@ -218,7 +228,7 @@ async def check_template_access(
 ):
     """
     Check if user can generate with a specific template
-    Returns what's needed to proceed
+    Now shows uses_remaining for paid templates
     """
     
     template = db.query(Template).filter(Template.id == template_id).first()
@@ -251,13 +261,20 @@ async def check_template_access(
     else:
         # PAID TEMPLATE
         if current_user.can_generate_with_paid_template(template_id):
+            # NEW: Get detailed usage info
+            usage_info = current_user.get_token_usage_for_template(template_id)
+            
             response["can_generate"] = True
-            response["reason"] = "Valid payment token available"
+            response["reason"] = f"You have {usage_info['uses_remaining']} generations remaining"
+            response["uses_remaining"] = usage_info["uses_remaining"]  # NEW
+            response["total_uses_purchased"] = usage_info["total_uses_purchased"]  # NEW
+            response["available_tokens"] = usage_info["available_tokens"]  # NEW
         else:
             response["can_generate"] = False
             response["reason"] = "Payment required"
             response["action_required"] = "purchase"
             response["price"] = float(template.price)
             response["currency"] = template.currency
+            response["uses_per_purchase"] = 2  # NEW: Show how many uses they'll get
     
     return response

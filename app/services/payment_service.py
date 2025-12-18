@@ -35,18 +35,7 @@ class PaymentService:
     ) -> Dict[str, Any]:
         """
         Create a payment order for a template generation
-        
-        Args:
-            user: User making the payment
-            template: Template being purchased
-            db: Database session
-            
-        Returns:
-            Dict containing payment order details
-            
-        Raises:
-            ValueError: If template is free
-            Exception: If order creation fails
+        NOW: Creates token with 2 uses by default
         """
         
         if template.is_free:
@@ -54,29 +43,32 @@ class PaymentService:
             raise ValueError("Cannot create payment for free template")
         
         try:
-            # Create payment token record
+            # ============================================
+            # UPDATED: Create token with 2 uses
+            # ============================================
             token = PaymentToken(
                 user_id=user.id,
                 template_id=template.id,
                 payment_status=PaymentStatus.PENDING,
                 amount_paid=template.price,
                 currency=template.currency,
-                status=TokenStatus.UNUSED
+                status=TokenStatus.UNUSED,
+                uses_total=2,  # NEW: 2 generations per purchase
+                uses_remaining=2  # NEW: Start with 2 available
             )
             
             db.add(token)
             db.commit()
             db.refresh(token)
             
-            logger.info(f"Payment token created: {token.id} for user {user.id}, template {template.id}")
+            logger.info(f"Payment token created: {token.id} for user {user.id}, template {template.id} (2 uses)")
             
             # TEST MODE
             if PaymentService._is_test_mode():
                 logger.info(f"TEST MODE: Creating test order for token {token.id}")
                 
-                # Generate test order ID (not payment ID yet)
                 test_order_id = f"order_TEST_{secrets.token_hex(8)}"
-                token.payment_id = test_order_id  # Store order ID temporarily
+                token.payment_id = test_order_id
                 db.commit()
                 
                 return {
@@ -87,7 +79,8 @@ class PaymentService:
                     "currency": token.currency,
                     "status": "pending",
                     "test_mode": True,
-                    "message": "Test mode: Use any payment_id to verify",
+                    "uses_included": 2,  # NEW: Inform frontend
+                    "message": "Test mode: Use any payment_id to verify. You'll get 2 generations.",
                     "razorpay_key": "rzp_test_TESTMODE"
                 }
             
@@ -98,19 +91,18 @@ class PaymentService:
                 logger.error("Razorpay credentials not configured")
                 raise Exception("Payment gateway not configured")
             
-            # Initialize Razorpay client
             client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
             
-            # Create order
             order_data = {
-                "amount": int(template.price * 100),  # Convert to smallest currency unit
+                "amount": int(template.price * 100),
                 "currency": template.currency,
                 "receipt": f"token_{token.id}",
                 "notes": {
                     "user_id": str(user.id),
                     "template_id": str(template.id),
                     "token_id": str(token.id),
-                    "user_email": user.email
+                    "user_email": user.email,
+                    "uses_included": "2"  # NEW: Track in payment notes
                 }
             }
             
@@ -118,7 +110,6 @@ class PaymentService:
             order = client.order.create(data=order_data)
             logger.info(f"Razorpay order created: {order['id']}")
             
-            # Save order ID (not payment ID yet)
             token.payment_id = order['id']
             db.commit()
             
@@ -129,6 +120,7 @@ class PaymentService:
                 "amount": float(template.price),
                 "currency": template.currency,
                 "status": "pending",
+                "uses_included": 2,  # NEW
                 "razorpay_key": settings.RAZORPAY_KEY_ID,
                 "test_mode": False
             }
@@ -137,13 +129,11 @@ class PaymentService:
             db.rollback()
             logger.error(f"Payment order creation failed: {str(e)}", exc_info=True)
             
-            # Mark token as failed if it exists
             if 'token' in locals():
                 token.payment_status = PaymentStatus.FAILED
                 db.commit()
             
-            raise Exception(f"Failed to create payment order: {str(e)}")
-    
+            raise Exception(f"Failed to create payment order: {str(e)}")   
 
     @staticmethod
     def verify_payment(

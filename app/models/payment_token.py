@@ -27,21 +27,64 @@ class PaymentToken(Base):
     amount_paid = Column(Numeric(10, 2), nullable=False)
     currency = Column(String, default="INR")
     status = Column(Enum(TokenStatus), default=TokenStatus.UNUSED)
-    used_at = Column(DateTime, nullable=True)
+    
+    # ============================================
+    # NEW: Multi-use token system
+    # ============================================
+    uses_total = Column(Integer, default=2, nullable=False)  # Total uses allowed
+    uses_remaining = Column(Integer, default=2, nullable=False)  # Uses left
+    
+    used_at = Column(DateTime, nullable=True)  # First use timestamp
+    last_used_at = Column(DateTime, nullable=True)  # Most recent use
     refund_id = Column(String, nullable=True)
     refunded_at = Column(DateTime, nullable=True)
     refund_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)    
+    
     user = relationship("User", back_populates="payment_tokens")
     template = relationship("Template", back_populates="payment_tokens")
-    generation = relationship("Generation", back_populates="payment_token", uselist=False)
+    generations = relationship("Generation", back_populates="payment_token")
 
+    # ============================================
+    # UPDATED METHODS
+    # ============================================
+    
+    def can_be_used(self) -> bool:
+        """Check if token still has uses remaining"""
+        return (
+            self.payment_status == PaymentStatus.COMPLETED and
+            self.status != TokenStatus.REFUNDED and
+            self.status != TokenStatus.EXPIRED and
+            self.uses_remaining > 0
+        )
+    
+    def use_token(self):
+        """
+        Deduct one use from the token
+        Automatically marks as USED when uses_remaining reaches 0
+        """
+        if self.uses_remaining <= 0:
+            raise ValueError("No uses remaining on this token")
+        
+        # First use
+        if self.used_at is None:
+            self.used_at = datetime.utcnow()
+        
+        # Deduct use
+        self.uses_remaining -= 1
+        self.last_used_at = datetime.utcnow()
+        
+        # Mark as fully used if no uses left
+        if self.uses_remaining == 0:
+            self.status = TokenStatus.USED
+    
     def mark_as_used(self, generation_id: int = None):
-        self.status = TokenStatus.USED
-        self.used_at = datetime.utcnow()
-        if generation_id:
-            self.generation_id = generation_id
+        """
+        Legacy method - now calls use_token()
+        Kept for backward compatibility
+        """
+        self.use_token()
 
     def mark_as_refunded(self, refund_id: str, reason: str):
         """Mark token as refunded."""
@@ -50,3 +93,16 @@ class PaymentToken(Base):
         self.refund_id = refund_id
         self.refund_reason = reason
         self.refunded_at = datetime.utcnow()
+    
+    @property
+    def is_available(self) -> bool:
+        """Check if token is available for use"""
+        return self.can_be_used()
+    
+    @property
+    def usage_percentage(self) -> float:
+        """Get usage percentage (0-100)"""
+        if self.uses_total == 0:
+            return 100.0
+        used = self.uses_total - self.uses_remaining
+        return (used / self.uses_total) * 100

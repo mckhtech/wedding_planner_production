@@ -57,41 +57,68 @@ class User(Base):
         """
         return self.free_credits_remaining > 0
     
+# ============================================
+    # UPDATED HELPER METHODS (Replace existing methods)
+    # ============================================
+    
     def can_generate_with_paid_template(self, template_id: int) -> bool:
         """
-        Check if user has an unused paid token for specific paid template
-        Returns True if user has purchased and not yet used a token for this template
+        Check if user has an available paid token for specific paid template
+        Returns True if user has a token with uses_remaining > 0
         """
-        from app.models.payment_token import PaymentToken, TokenStatus, PaymentStatus
+        from app.models.payment_token import PaymentToken
         
-        # Check for unused token with completed payment
-        unused_token = next(
+        # Check for available token with uses remaining
+        available_token = next(
             (token for token in self.payment_tokens 
              if token.template_id == template_id 
-             and token.status == TokenStatus.UNUSED
-             and token.payment_status == PaymentStatus.COMPLETED),
+             and token.can_be_used()),  # NEW: Uses can_be_used() method
             None
         )
-        return unused_token is not None
+        return available_token is not None
     
     def get_unused_token_for_template(self, template_id: int):
-        """Get the first unused paid token for a specific template"""
-        from app.models.payment_token import PaymentToken, TokenStatus, PaymentStatus
+        """
+        Get the first available paid token for a specific template
+        Now returns tokens with uses_remaining > 0
+        """
+        from app.models.payment_token import PaymentToken
         
         return next(
             (token for token in self.payment_tokens 
              if token.template_id == template_id 
-             and token.status == TokenStatus.UNUSED
-             and token.payment_status == PaymentStatus.COMPLETED),
+             and token.can_be_used()),  # NEW: Uses can_be_used() method
             None
         )
     
-    def deduct_free_credit(self) -> bool:
+    def get_token_usage_for_template(self, template_id: int) -> dict:
         """
-        Deduct 1 free credit
-        Returns True if successful, False if no credits available
+        NEW METHOD: Get token usage summary for a template
+        Returns dict with total_uses, uses_remaining, and tokens info
         """
-        if self.free_credits_remaining > 0:
-            self.free_credits_remaining -= 1
-            return True
-        return False
+        from app.models.payment_token import PaymentToken, PaymentStatus
+        
+        tokens = [
+            token for token in self.payment_tokens 
+            if token.template_id == template_id 
+            and token.payment_status == PaymentStatus.COMPLETED
+        ]
+        
+        total_uses_purchased = sum(token.uses_total for token in tokens)
+        total_uses_remaining = sum(token.uses_remaining for token in tokens)
+        total_uses_consumed = total_uses_purchased - total_uses_remaining
+        
+        return {
+            "total_tokens": len(tokens),
+            "total_uses_purchased": total_uses_purchased,
+            "uses_remaining": total_uses_remaining,
+            "uses_consumed": total_uses_consumed,
+            "available_tokens": [
+                {
+                    "token_id": token.id,
+                    "uses_remaining": token.uses_remaining,
+                    "uses_total": token.uses_total
+                }
+                for token in tokens if token.can_be_used()
+            ]
+        }

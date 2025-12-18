@@ -1,0 +1,512 @@
+Week,Phase,Team Member,Tasks,Deliverables,Priority
+Week 1,Foundation,Backend Lead,"• Django 5.x + DRF setup
+• PostgreSQL + Redis Docker setup
+• Custom User model creation
+• JWT auth research
+• Gmail OAuth flow planning","• Django project structure with requirements.txt
+• docker-compose.yml and .env.example
+• User model with migrations
+• Authentication architecture document",Critical
+Week 1,Foundation,Backend Dev 2,"• Complete database ERD design
+• All models planning (Email/Thread/Category/Rule/Task/Calendar)
+• Model relationships documentation
+• Initial migration files","• ERD diagram (dbdiagram.io link)
+• models.py stubs for all apps
+• Schema documentation (Markdown)
+• Migration files for all models",Critical
+Week 1,Foundation,Frontend Dev 1,"• React + Vite + TypeScript setup
+• React Router v6 configuration
+• Axios API client with interceptors
+• Auth context (login/logout logic)
+• Login/Register pages UI","• React project structure with package.json
+• Router setup with /login, /register, /dashboard routes
+• services/api.ts with auth interceptors
+• Auth context provider and token utilities
+• Login.tsx and Register.tsx components",Critical
+Week 1,Foundation,Frontend Dev 2,"• Tailwind CSS + shadcn/ui setup
+• Three-panel layout shell
+• Responsive breakpoints
+• Theme tokens (light/dark)
+• Lucide React icons integration","• tailwind.config.js with shadcn components
+• Layout.tsx with sidebar/main/detail panels
+• Theme configuration with CSS variables
+• Reusable UI components (Button/Input/Card)
+• Icon system documentation",Critical
+Week 1,Foundation,AI Developer,"• OpenAI API key setup and testing
+• Email categorization prompt engineering
+• Test script for GPT-4 categorization
+• Token cost analysis
+• AI service architecture planning","• Working OpenAI connection with test script
+• Categorization prompt templates
+• Cost projection document
+• AI integration spec document to share with backend team",High
+Week 2,Foundation,Backend Lead,"• Finalize User model with all required fields
+• JWT login and register endpoints (/api/auth/login, /register)
+• Token refresh logic implementation
+• Email and EmailThread models finalized
+• Swagger/OpenAPI documentation setup","• Complete User model migrated to database
+• Auth endpoints working and tested
+• Token refresh endpoint with middleware
+• Email/EmailThread models in database
+• Swagger UI live at /api/docs/",Critical
+Week 2,Foundation,Backend Dev 2,"• Rule model with priority and conditions
+• AI interaction logging model
+• Task model with priority/status/due_date
+• CalendarEvent model for multi-provider events
+• Run all migrations and verify schema
+• Create sample data seeding script","• All models in PostgreSQL database
+• Admin panel configured for all models
+• Sample data seeding script for testing
+• Database schema fully operational",Critical
+Week 2,Foundation,Frontend Dev 1,"• OAuth callback page (/auth/callback)
+• Protected route wrapper component
+• API interceptor for automatic token refresh
+• Global error handling utilities
+• Reusable loading state components","• Complete OAuth callback handling
+• ProtectedRoute component with redirect logic
+• Axios interceptor handling 401 responses
+• Error handling utilities with toast system
+• Loading spinner and skeleton components",Critical
+Week 2,Foundation,Frontend Dev 2,"• Sidebar navigation with folders/categories
+• Panel collapse and expand functionality
+• Panel resize with drag handles
+• Email list skeleton component
+• Email detail skeleton component","• Sidebar.tsx with collapsible sections
+• Collapsible panel controls working
+• Resizable panels with localStorage persistence
+• EmailList.tsx and EmailDetail.tsx skeleton structures",Critical
+Week 2,Foundation,AI Developer,"• Django AI service module skeleton
+• OpenAI client wrapper with error handling
+• Email categorization function
+• Email summarization function
+• Unit tests for AI functions
+• Cost tracking helper functions","• ai/services/ directory structure created
+• openai_service.py with retry logic
+• categorize_email() and summarize_email() functions
+• Test suite for AI services
+• Token usage tracking utilities",High
+Week 3,Phase 1: Core Email System,Backend Lead,"• Gmail OAuth2 complete flow (/api/integrations/gmail/authorize)
+• Gmail OAuth callback handler (/callback)
+• EmailAccount model with encrypted token fields
+• Token encryption/decryption utilities (Fernet/AES)
+• Test Gmail OAuth with real account","• Working Gmail OAuth flow end-to-end
+• Tokens stored securely in database
+• Successfully connected to test Gmail account
+• EmailAccount model operational",Critical
+Week 3,Phase 1: Core Email System,Backend Dev 2,"• Gmail API service wrapper (integrations/gmail/service.py)
+• Fetch messages function with pagination
+• Fetch threads function with full conversation
+• Email parser handling HTML/plain text
+• Celery task for background email sync (tasks/sync_gmail_emails.py)","• Gmail service module complete
+• Email fetching and parsing working
+• Celery background sync task operational
+• Emails being stored in database",Critical
+Week 3,Phase 1: Core Email System,Frontend Dev 1,"• Gmail connection button in /settings/email-accounts
+• OAuth redirect to Google with state parameter
+• Display connection success/error states
+• Connected accounts list showing sync status
+• Email Accounts settings tab complete","• /settings/email-accounts page functional
+• OAuth flow working from UI
+• Success/error toast notifications
+• Account connection status displayed",Critical
+Week 3,Phase 1: Core Email System,Frontend Dev 2,"• Email list component connected to /api/emails/
+• Email item card with sender/subject/preview
+• Platform badge showing Gmail logo
+• Unread count badge on email items
+• Relative timestamp formatting (2h ago, yesterday)","• EmailList.tsx displaying real API data
+• EmailItem.tsx with polished design
+• Platform indicators working
+• Unread badges visible
+• Timestamp formatting utility",Critical
+Week 3,Phase 1: Core Email System,AI Developer,"• Django REST endpoint /api/ai/categorize/
+• Call OpenAI in background task (async with Celery)
+• Store AI categorization response in database
+• Basic confidence scoring (0-100)
+• Test categorization with 10+ emails (response time < 3s)","• AI categorization endpoint live
+• Background AI processing working
+• Confidence scores stored in database
+• Performance tested and acceptable",High
+Week 4,Phase 1: Core Email System,Backend Lead,"• Email list endpoint with pagination (/api/emails/)
+• Email detail endpoint (/api/emails/{id}/)
+• Manual sync trigger (/api/emails/sync/)
+• Read/unread toggle endpoints
+• Archive and delete endpoints","• Complete email CRUD API
+• Pagination working (25/50/100 per page)
+• All email actions functional",Critical
+Week 4,Phase 1: Core Email System,Backend Dev 2,"• Thread grouping logic using In-Reply-To headers
+• Thread list endpoint (/api/threads/)
+• Thread detail with all emails (/api/threads/{id}/emails/)
+• Real-time sync with Celery Beat (every 5 minutes)
+• Email search endpoint (basic full-text on subject/content)","• Threaded email view working
+• Auto-sync running every 5 minutes
+• Search functional for subject and content
+• Thread relationships properly displayed",Critical
+Week 4,Phase 1: Core Email System,Frontend Dev 1,"• Email detail panel with full content
+• HTML email rendering (sanitized with DOMPurify)
+• Plain text fallback when HTML unavailable
+• Thread conversation view with reply tree
+• Email action buttons (read/archive/delete) working","• EmailDetail.tsx component complete
+• HTML emails render safely
+• Thread visualization functional
+• All email actions working from UI",Critical
+Week 4,Phase 1: Core Email System,Frontend Dev 2,"• Search bar component with debounced input
+• Dedicated search results page (/search route)
+• Text highlighting utility for search terms
+• Filter dropdown (date/read status) with multi-select
+• Empty state component for no search results","• SearchBar.tsx with autocomplete
+• Search results page functional
+• Search highlighting working
+• Filters operational
+• Empty states for no results",High
+Week 4,Phase 1: Core Email System,AI Developer,"• Improve categorization prompts (accuracy > 80%)
+• Add email history context (user's past 20 emails)
+• Batch categorization (10 emails at once) to reduce API calls
+• AI response caching with Redis (24-hour cache)
+• Token usage tracking in database","• Categorization accuracy improved to 80%+
+• Context-aware categorization
+• Response time reduced to < 2s
+• Caching implemented
+• Token usage logged per request",High
+Week 5,Phase 1: Core Email System,Backend Lead,"• Category model with name/color/icon fields
+• Category CRUD endpoints (/api/categories/)
+• Seed 8 default categories (Important/FYI/Marketing/etc.)
+• Custom category creation by user
+• Category color picker and icon selection support","• Category management API complete
+• Default categories loaded in database
+• Users can create/edit/delete custom categories",Critical
+Week 5,Phase 1: Core Email System,Backend Dev 2,"• Rule model with sender/subject/keyword conditions
+• Rule engine implementation with priority ordering
+• Rule matching logic (regex-based for keywords)
+• Rule CRUD endpoints (/api/rules/)
+• Auto-apply rules in sync pipeline
+• Rule testing endpoint (/api/rules/test/)","• Rule-based categorization working
+• Rules apply automatically during sync
+• Users can create/test rules
+• Rule priority system operational",Critical
+Week 5,Phase 1: Core Email System,Frontend Dev 1,"• Category list in sidebar with icons and colors
+• Click category to filter email list
+• Unread count badge per category
+• Display category colors consistently throughout UI
+• Settings page for categories (/settings/categories)","• Category sidebar functional
+• Filtering by category working
+• Unread counts per category displayed
+• /settings/categories page complete",High
+Week 5,Phase 1: Core Email System,Frontend Dev 2,"• Create category modal with form
+• Edit category modal with delete option
+• Icon picker from Lucide icons
+• Color picker with preset colors
+• Basic rule creation form with condition builder","• Category management UI complete
+• Icon and color selection working
+• Rule creation UI functional",High
+Week 5,Phase 1: Core Email System,AI Developer,"• Hybrid AI + rule categorization (rules override AI)
+• Confidence threshold implementation (only apply AI if > 70%)
+• Allow manual category override by user
+• AI accuracy tracking dashboard (internal)
+• Performance optimization (response time < 2s)","• Hybrid categorization live
+• Rules take priority over AI suggestions
+• Manual overrides working
+• Accuracy dashboard operational
+• Performance targets met",High
+Week 6,Phase 2: AI Intelligence Layer,Backend Lead,"• Integrate AI categorization into sync pipeline
+• Confidence scoring system (0-100 stored in DB)
+• Manual override endpoint (/api/emails/{id}/override_category/)
+• Store all AI interactions in AIInteraction model
+• AI history endpoint (/api/ai/history/)","• AI categorizes emails during every sync
+• Confidence scores tracked
+• Users can override AI categories
+• AI interaction history stored and accessible",Critical
+Week 6,Phase 2: AI Intelligence Layer,Backend Dev 2,"• AIConversation model for chat messages
+• Store chat messages with role (user/assistant)
+• Chat endpoint with streaming response (/api/ai/chat/ with SSE)
+• Context management (last 10 messages maintained)
+• Rate limiting for AI requests (10 per minute per user)","• AI chat API working with streaming
+• Conversation history persisted in database
+• Context window managed properly
+• Rate limiting protecting API",Critical
+Week 6,Phase 2: AI Intelligence Layer,Frontend Dev 1,"• Floating AI assistant button (bottom right)
+• AI chat panel slides from right with animation
+• Chat message bubbles (user/AI styling)
+• Context indicator showing which email AI is analyzing
+• Smooth open/close animations","• FloatingAIButton component
+• AIChatPanel with slide animation
+• Chat UI polished and functional
+• Context displayed clearly",Critical
+Week 6,Phase 2: AI Intelligence Layer,Frontend Dev 2,"• AI categorization badge on emails (AI icon)
+• Confidence score tooltip (percentage display)
+• Manual category override button
+• Override confirmation modal with category selector
+• Consistent AI visual styling (colors/icons)","• AI badges visible on categorized emails
+• Confidence tooltips working
+• Override UI functional
+• Visual branding consistent",High
+Week 6,Phase 2: AI Intelligence Layer,AI Developer,"• Build context for AI chat (email content + thread history)
+• Include current email in AI context
+• Include entire thread history in context
+• Include user's categorization preferences in context
+• Token limit management (trim context to fit 8k tokens)
+• Optimize cost per chat (< $0.05)","• AI chat understands full email context
+• Context window optimized for 8k tokens
+• Cost per chat meets target
+• Quality maintained with optimized context",Critical
+Week 7,Phase 2: AI Intelligence Layer,Backend Lead,"• Email summarization endpoint (/api/ai/summarize/)
+• Thread summarization (multiple emails in one call)
+• Summary length options (short: 2-3 sentences / detailed: paragraph)
+• Summary caching (Redis 24-hour cache)
+• Summarization response time < 4s","• Summarization endpoint functional
+• Short and detailed summaries working
+• Caching implemented
+• Performance targets met",Critical
+Week 7,Phase 2: AI Intelligence Layer,Backend Dev 2,"• Reply generation endpoint (/api/ai/reply/)
+• Reply generation with email and thread context
+• Tone options (professional/casual/formal)
+• Reply draft storage in database
+• AI usage analytics tracking (feature usage per user)
+• Internal analytics dashboard","• Reply generation working
+• All three tones functional
+• Drafts saved properly
+• Analytics dashboard operational",Critical
+Week 7,Phase 2: AI Intelligence Layer,Frontend Dev 1,"• Summarize button on email detail
+• Summary modal/panel showing generated summary
+• Summary length selector (short/detailed toggle)
+• Copy summary to clipboard button with success feedback
+• Loading state for summarization","• SummaryModal component complete
+• Summary display polished
+• Copy-to-clipboard working
+• Loading indicators functional",Critical
+Week 7,Phase 2: AI Intelligence Layer,Frontend Dev 2,"• Generate reply button on email
+• Reply editor (rich text) with AI-generated draft
+• Tone selector dropdown (professional/casual/formal)
+• Regenerate reply button (different tone)
+• Integration with email send functionality","• ReplyComposer with AI integration
+• Tone selection working
+• Regeneration functional
+• Send integration complete",Critical
+Week 7,Phase 2: AI Intelligence Layer,AI Developer,"• Optimize summarization prompts (quality > 85%)
+• Optimize reply generation prompts (quality > 80%)
+• Handle multi-turn conversations in chat (context across exchanges)
+• Generate 3 smart reply suggestions per email
+• Quality scoring for AI-generated content (0-100 score)
+• Achieve quality targets (summarization > 85%, replies > 80%)","• Summarization quality 85%+
+• Reply quality 80%+
+• Multi-turn chat working
+• Smart reply suggestions (3 options)
+• Quality metrics tracked",Critical
+Week 8,Phase 2: AI Intelligence Layer,Backend Lead,"• AI feedback endpoints (/api/ai/feedback/ with thumbs up/down)
+• Fallback to basic responses when OpenAI API down
+• Improve AI error handling (better error messages + retry logic)
+• Usage limit per user (100 AI calls/day)
+• Cost tracking dashboard (internal - daily/monthly costs)","• User feedback system working
+• Graceful degradation when API unavailable
+• Error handling polished
+• Usage limits enforced
+• Cost tracking operational",High
+Week 8,Phase 2: AI Intelligence Layer,Backend Dev 2,"• Smart reply suggestions endpoint (/api/ai/smart_replies/ returns 3)
+• AI priority detection algorithm (high/medium/low)
+• Configurable confidence thresholds (admin adjustable)
+• AI feature toggle settings (admin can enable/disable features)
+• Status webhook for AI service monitoring","• Smart reply suggestions API working
+• Priority detection 75%+ accuracy
+• Feature toggles functional
+• Monitoring webhook operational",High
+Week 8,Phase 2: AI Intelligence Layer,Frontend Dev 1,"• Persist AI chat history across sessions (loads on refresh)
+• Copy AI responses to clipboard button
+• Thumbs up/down feedback buttons on AI messages
+• Polished loading states for all AI operations
+• User-friendly error states for AI failures","• Chat history persists
+• Copy functionality working
+• Feedback buttons functional
+• Loading/error states polished",High
+Week 8,Phase 2: AI Intelligence Layer,Frontend Dev 2,"• Smart reply suggestion cards UI
+• Click suggestion to populate reply field (one-click)
+• Priority badge on emails (high/medium/low indicators)
+• AI settings page (/settings/ai) for feature toggles
+• User-facing AI usage tracking display (calls per day)","• Smart reply cards functional
+• One-click reply population
+• Priority badges visible
+• Settings page complete
+• Usage display working",High
+Week 8,Phase 2: AI Intelligence Layer,AI Developer,"• Prompt A/B testing framework for variations
+• Token usage optimization (reduce by 20%)
+• Response caching strategy improvements (better hit rates)
+• Automate quality metrics collection
+• Weekly AI accuracy report automation","• Prompts optimized for cost
+• Token usage reduced 20%
+• Cache hit rate improved
+• Automated quality tracking
+• Weekly reports generated",High
+Week 9,Phase 3: Productivity Features,Backend Lead,"• Task model CRUD endpoints (/api/tasks/)
+• Task fields (title/description/priority/status/due_date)
+• Email-to-task conversion endpoint (/api/tasks/from-email/{email_id}/)
+• Task metadata extraction from email (auto-populate from content)
+• Link tasks to source emails (task references original email ID)","• Task management API complete
+• Email-to-task conversion working
+• Metadata extraction functional
+• Tasks properly linked to emails",Critical
+Week 9,Phase 3: Productivity Features,Backend Dev 2,"• Google Calendar OAuth2 flow (/api/integrations/calendar/google/authorize)
+• Google Calendar OAuth callback (/callback)
+• Fetch calendar events from Google (with pagination)
+• Calendar events list endpoint (/api/calendar/events/)
+• Multi-timezone support with pytz","• Google Calendar connected
+• Events fetched and stored
+• Timezone handling operational
+• Calendar API functional",Critical
+Week 9,Phase 3: Productivity Features,Frontend Dev 1,"• Task list view with view switcher (tile/table/kanban)
+• Task creation modal with form fields
+• Email → Task conversion button on email detail
+• Task detail view modal with all information
+• Task filters (status/priority/due date)","• TaskList component with all views
+• Task creation working from UI
+• Email-to-task button functional
+• Task detail modal complete
+• Filtering operational",Critical
+Week 9,Phase 3: Productivity Features,Frontend Dev 2,"• Task statistics dashboard (total/todo/in-progress/completed/overdue)
+• Overdue task visual indicators (red highlighting)
+• Task priority badges (color-coded)
+• Task status icons (todo/in-progress/completed)
+• Sort and filter controls (deadline/priority/status/title)","• Task dashboard with stats
+• Overdue tasks highlighted
+• Priority and status indicators visible
+• Sorting and filtering working",High
+Week 9,Phase 3: Productivity Features,AI Developer,"• AI task priority prediction from email (high/medium/low)
+• Task title extraction from email (generate from subject/content)
+• Task description extraction from email (generate from body)
+• Due date suggestion from email content
+• Meeting time extraction from email (detect date/time mentions)","• AI suggests task priority (75%+ accuracy)
+• Title and description generated
+• Due dates extracted
+• Meeting times detected",High
+Week 10,Phase 3: Productivity Features,Backend Lead,"• Google Drive OAuth2 integration (/api/integrations/drive/authorize)
+• Drive file listing endpoint (/api/integrations/drive/files/)
+• File search in Google Drive (search by name/type)
+• Generate file preview URLs (shareable links)
+• Link email attachments to Drive files","• Google Drive connected
+• Files browsable via API
+• Search functional
+• Preview links working
+• Attachment linking operational",High
+Week 10,Phase 3: Productivity Features,Backend Dev 2,"• Email-to-event conversion endpoint (/api/calendar/events/from-email/)
+• Calendar event CRUD endpoints (full create/read/update/delete)
+• Event attendee management (add/remove attendees)
+• Event reminder setup for calendar events
+• Event metadata (type: meeting/call, status: confirmed/tentative/cancelled)","• Email-to-event working
+• Event CRUD functional
+• Attendees manageable
+• Reminders operational
+• Event metadata stored",Critical
+Week 10,Phase 3: Productivity Features,Frontend Dev 1,"• Calendar component with view switcher (month/week/day)
+• Event creation modal with form
+• Email → Event conversion button on email detail
+• Event detail view modal with full information
+• Multi-calendar display (Gmail + Outlook calendars together)","• Calendar component with all views
+• Event creation from UI working
+• Email-to-event button functional
+• Event detail modal complete
+• Multiple calendars displayed",Critical
+Week 10,Phase 3: Productivity Features,Frontend Dev 2,"• Google Drive file browser UI component
+• File preview modal with iframe/viewer
+• Attachment list with Drive icon/link
+• File search interface for Drive
+• Recent files widget showing recent Drive files","• FileBrowser component functional
+• File previews working
+• Attachments linked to Drive
+• Search interface operational
+• Recent files widget displayed",High
+Week 10,Phase 3: Productivity Features,AI Developer,"• AI suggests calendar events from email (detect meeting requests)
+• Extract meeting time from email (parse natural language dates)
+• Extract attendees from email (detect participant names/emails)
+• Generate event title from email (descriptive title)
+• Extract meeting location from email (physical/virtual)","• AI suggests events (80%+ accuracy)
+• Time extraction working
+• Attendees parsed correctly
+• Titles generated appropriately
+• Locations extracted",High
+Week 11,Phase 4: Polish & Deploy,Backend Lead,"• Outlook OAuth2 integration (/api/integrations/outlook/authorize)
+• Outlook OAuth callback handler (/callback)
+• Outlook email sync using Microsoft Graph API
+• Outlook Calendar integration (sync events)
+• OneDrive API integration for file access","• Outlook fully integrated
+• Emails syncing from Outlook
+• Outlook Calendar working
+• OneDrive accessible
+• Multi-provider email operational",Critical
+Week 11,Phase 4: Polish & Deploy,Backend Dev 2,"• Security audit (OWASP Top 10 checklist completed)
+• Verify token encryption (all tokens encrypted at rest)
+• Rate limiting on all API endpoints (prevent abuse)
+• CORS configuration for production (whitelist frontend domain)
+• Sentry error logging setup (error tracking integrated)","• Security checklist completed
+• All tokens encrypted
+• Rate limiting operational
+• CORS configured
+• Sentry tracking errors",Critical
+Week 11,Phase 4: Polish & Deploy,Frontend Dev 1,"• Theme switcher (light/dark/auto) in settings
+• Responsive mobile layout complete (all pages work on mobile)
+• Loading states on all async operations (consistent indicators)
+• Error boundaries for graceful failures
+• Toast notification system (success/error/info)","• Theme switching working
+• Mobile layout fully responsive
+• Loading states consistent
+• Error boundaries implemented
+• Notifications functional",Critical
+Week 11,Phase 4: Polish & Deploy,Frontend Dev 2,"• Complete all 8 settings tabs (/settings/*)
+• User onboarding flow (modal for new users)
+• Help tooltips on key features (explain functionality)
+• Empty states for all views (inbox/tasks/calendar/etc.)
+• Basic keyboard shortcuts (j/k navigation, etc.)","• All settings tabs functional
+• Onboarding modal complete
+• Tooltips on key features
+• Empty states everywhere
+• Keyboard shortcuts working",Critical
+Week 11,Phase 4: Polish & Deploy,AI Developer,"• Finalize production prompts (optimized for all features)
+• AI cost monitoring dashboard (internal - daily/monthly tracking)
+• AI feature usage analytics (which features used most)
+• AI quality reporting automation (accuracy reports)
+• Documentation for AI capabilities (user-facing + internal)","• Production prompts finalized
+• Cost dashboard operational
+• Usage analytics tracked
+• Quality reports automated
+• Documentation complete",High
+Week 12,Phase 4: Polish & Deploy,Backend Lead,"• AWS EC2 Ubuntu server setup (Ubuntu 22.04 instance)
+• Nginx + Gunicorn configuration (reverse proxy)
+• PostgreSQL RDS setup (production database)
+• Redis ElastiCache setup (caching + Celery queue)
+• SSL certificate installation (Let's Encrypt - HTTPS working)","• Production server live on AWS
+• Nginx reverse proxy working
+• Database on RDS operational
+• Redis cache working
+• HTTPS with valid certificate",Critical
+Week 12,Phase 4: Polish & Deploy,Backend Dev 2,"• Production environment variables management (secure .env)
+• Automated database backup strategy (daily backups to S3)
+• Celery worker deployment on EC2
+• Health check endpoint (/health for uptime monitoring)
+• API rate limit tuning for production (optimize based on testing)","• Environment variables secured
+• Daily automated backups to S3
+• Celery workers running
+• Health checks operational
+• Rate limits optimized",Critical
+Week 12,Phase 4: Polish & Deploy,Frontend Dev 1,"• Deploy frontend to Netlify (production URL live)
+• Frontend environment variables setup (API URL + keys configured)
+• Production build optimization (build < 500KB gzipped)
+• CDN configuration for static assets
+• Analytics integration (Google Analytics or similar - optional)","• Frontend deployed to Netlify
+• Environment variables configured
+• Build optimized and fast
+• CDN serving assets
+• Analytics tracking (if added)",Critical
+Week 12,Phase 4: Polish & Deploy,Frontend Dev 2,"• Final UI polish pass (fix visual inconsistencies)
+• Cross-browser testing (Chrome/Firefox/Safari compatibility)
+• Mobile testing on real devices (iOS/Android)
+• Accessibility audit (meet WCAG 2.1 AA standards)
+• Performance optimization (Lighthouse score > 90)","• UI polished and consistent
+• All browsers working
+• Mobile tested on real devices
+• WCAG AA standards met
+• Lighthouse score > 90",Critical
+Week 12,Phase 4: Polish & Deploy,AI Developer,"• Production AI monitoring setup (monitor performance in production)
+• Cost alerts (alert if AI costs exceed threshold)
+• AI response time monitoring (track response times)
+• Quality degradation alerts (alert if accuracy drops)
+• User-facing AI documentation (help center articles)","• Production monitoring live
+• Cost alerts configured
+• Response time tracked
+• Quality alerts operational
+• User documentation published",High

@@ -82,7 +82,7 @@ async def create_template(
             StorageService.validate_image_file(preview_image)
             preview_image_path = await StorageService.save_upload_file(
                 preview_image, 
-                settings.TEMPLATE_PREVIEW_DIR
+                "template_previews"
             )
             print(f"Saved preview image: {preview_image_path}")
         except Exception as e:
@@ -176,7 +176,7 @@ async def update_template(
             StorageService.validate_image_file(preview_image)
             new_preview_path = await StorageService.save_upload_file(
                 preview_image,
-                settings.TEMPLATE_PREVIEW_DIR
+                "template_previews"
             )
             template.preview_image = new_preview_path
         except Exception as e:

@@ -1,0 +1,131 @@
+Section,Item,Details,Target/Criteria
+MILESTONE,Week 2: Foundation Complete,"All team members can code in parallel. Django + React projects running locally. Database schema finalized with ERD. All models created with migrations. API documentation started (Swagger). Auth flow designed. AI service architecture planned. GitHub repo with branching strategy.","✅ All devs productive
+✅ Database operational
+✅ Architecture documented"
+MILESTONE,Week 5: Phase 1 Complete - Core Email System,"Users can manage emails with basic AI categorization. User registration/login working. Gmail OAuth functional. Emails syncing every 5 minutes. Email list/detail views complete. Categories (default + custom) working. Rules engine applying on sync. AI categorization integrated. Search/filters functional.","✅ First demo-able to stakeholders
+✅ Users can read/manage emails
+✅ AI categorization working"
+MILESTONE,Week 8: Phase 2 Complete - AI Intelligence Layer,"AI features fully integrated and optimized. AI categorization live. AI chat with context awareness. Email summarization (< 4s). Reply generation with tones. Smart reply suggestions (3 per email). AI accuracy > 80%. User feedback system (👍👎). Cost tracking dashboard. Token usage optimized (-20%).","✅ AI is product differentiator
+✅ All AI features functional
+✅ Quality metrics achieved"
+MILESTONE,Week 10: Phase 3 Complete - Productivity Features,"Email-to-action workflows complete. Tasks from emails with AI metadata. Google Calendar integrated. Calendar events from emails. Google Drive accessible. Task management UI complete. Calendar views (month/week/day). AI suggesting priorities/events.","✅ Productivity layer complete
+✅ Email → Task/Event working
+✅ Files accessible"
+MILESTONE,Week 12: MVP Launch Ready,"Production deployed and ready for beta users. Outlook + OneDrive integrated. Security audit passed (OWASP Top 10). All 8 settings tabs functional. Theme switching. Mobile responsive (iOS/Android tested). AWS EC2 deployment (Nginx/Gunicorn). Netlify frontend with CDN. SSL/HTTPS. Daily database backups. Sentry error tracking. Health checks operational. Lighthouse > 90. WCAG 2.1 AA. Onboarding complete. Documentation written.","✅ PRODUCTION LIVE
+✅ Beta-ready
+✅ Security certified
+✅ Mobile + accessibility"
+RISK,Gmail OAuth Complexity - Week 3,High severity. Start early with Google OAuth Playground testing. Use test account for development. Mock OAuth flow temporarily if needed.,"Mitigation: Early start, thorough testing
+Contingency: Use mock for frontend development"
+RISK,AI Costs Exceed Budget - Week 6-8,High severity. Implement aggressive caching from day 1. Rate limiting (10 requests/min/user). Monitor costs daily.,"Mitigation: Caching + rate limits + monitoring
+Contingency: Reduce AI features or use gpt-3.5-turbo"
+RISK,Email Sync Performance - Week 4,High severity. Use Celery workers with batch processing. Optimize queries with select_related/prefetch_related.,"Mitigation: Celery + query optimization
+Contingency: Limit sync to last 30 days initially"
+RISK,Outlook Integration Issues - Week 11,Medium severity. Test Microsoft Graph API thoroughly in Week 10 before full integration.,"Mitigation: Early testing in Week 10
+Contingency: Launch with Gmail only, add Outlook post-launch"
+RISK,Frontend-Backend API Misalignment - Week 4+,Medium severity. Daily standups to review API contracts. Frontend uses mock data until backend ready.,"Mitigation: Daily API contract reviews
+Contingency: Frontend mocks APIs, integrates in batches"
+RISK,AWS Deployment Delays - Week 12,Medium severity. Start AWS EC2 setup in Week 10, not Week 12.,"Mitigation: Start deployment prep early
+Contingency: Use Heroku/Render for quick deployment"
+RISK,Scope Creep - All Weeks,High severity. Lock MVP scope in Week 1 document. Create Phase 2 backlog for all new requests. Say NO to new features.,"Mitigation: Locked scope + Phase 2 backlog
+Contingency: Prioritize ruthlessly based on user value"
+RISK,Team Member Unavailability - Any Week,Medium severity. Document all work clearly. Maintain up-to-date README files. Cross-train team members.,"Mitigation: Clear documentation + cross-training
+Contingency: Team members can cover for each other"
+METRIC,Email Sync Speed,< 30 seconds for 100 emails. Measure: Backend logging of sync duration. Track: Daily during development.,Target: < 30s for 100 emails
+METRIC,AI Categorization Accuracy,> 80% accuracy. Measure: Manual review of 100 randomly sampled emails. Track: Weekly starting Week 6.,Target: > 80% accuracy
+METRIC,AI Reply Quality,> 80% user satisfaction. Measure: User feedback thumbs up/down ratio. Track: Daily in production.,Target: > 80% satisfaction
+METRIC,Page Load Time,< 2 seconds. Measure: Google Lighthouse Performance score. Track: Weekly.,Target: < 2 seconds
+METRIC,API Response Time (95th percentile),< 500ms. Measure: Backend monitoring with Django Debug Toolbar / Sentry. Track: Daily.,Target: < 500ms (95th percentile)
+METRIC,Mobile Responsiveness,100% features work on mobile. Measure: Manual testing on iOS and Android devices. Track: Week 11-12.,Target: 100% mobile compatibility
+METRIC,OAuth Success Rate,> 95% success rate. Measure: Track OAuth failures in database. Track: Daily in production.,Target: > 95% success
+METRIC,Daily Active Users (Post-Launch),50+ users in first month. Measure: Analytics dashboard (Google Analytics or PostHog). Track: Daily after launch.,Target: 50+ DAU in Month 1
+METRIC,AI Cost Per User Per Day,< $0.50 per user per day. Measure: Token usage tracking in database. Track: Daily starting Week 6.,Target: < $0.50/user/day
+METRIC,Server Uptime,> 99.5% uptime. Measure: Health check endpoint monitoring (UptimeRobot). Track: Continuous after deployment.,Target: > 99.5% uptime
+SUCCESS_CRITERIA,After 12 weeks users should be able to:,"1. Connect Gmail + Outlook in under 2 minutes
+2. See all emails categorized automatically (AI + rules)
+3. Chat with AI about any email
+4. Generate professional replies in 1 click
+5. Convert important emails to tasks
+6. Create calendar events from emails
+7. Access Drive/OneDrive files without leaving Dexter","All 7 capabilities must work smoothly"
+MVP_SCOPE,✅ IN SCOPE - Keep These,"Gmail + Outlook Email (core value)
+AI Categorization with OpenAI (differentiator)
+Email Reply Generation (high-impact AI)
+Email Summarization (pain point solver)
+Rule-Based Categories (user control)
+Task Management - Email→Task (productivity)
+Google/Outlook Calendar (workflow extension)
+Google Drive + OneDrive (file convenience)
+Basic Search & Filters (table stakes)
+OAuth Authentication (security requirement)","These features define MVP success"
+MVP_SCOPE,❌ OUT OF SCOPE - Phase 2,"WhatsApp, Slack, Telegram, Instagram, Facebook (too many integrations)
+CRM Features - Lead Scoring, Contact Tags (adds complexity)
+Phishing Detection & Security Badges (nice-to-have)
+Follow-up Automation (complex, low early adoption)
+Sentiment Analysis (low priority AI)
+IMAP/POP3 Support (Gmail+Outlook covers 90%)
+Desktop Notifications (browser notifications sufficient)
+Quiet Hours (low priority)
+SharePoint, Dropbox (Drive+OneDrive sufficient)
+Progressive Web App (responsive web enough)
+Audit Trails (enterprise feature, not MVP)","Move to Month 4-6 post-launch"
+TECH_STACK,Backend,"Django 5.x + Django REST Framework
+PostgreSQL (primary database)
+Redis (caching + Celery queue)
+Celery + Celery Beat (async tasks + scheduling)
+Gunicorn (WSGI server)
+Nginx (reverse proxy)","Production-ready stack"
+TECH_STACK,Frontend,"React 18 + TypeScript (or JavaScript)
+Vite (build tool)
+Tailwind CSS (styling)
+shadcn/ui (component library)
+React Router v6 (routing)
+Axios (API client)
+Lucide React (icons)","Modern frontend stack"
+TECH_STACK,AI,"OpenAI GPT-4 Turbo (primary AI)
+Anthropic Claude (future fallback - not MVP)","AI provider with fallback plan"
+TECH_STACK,Integrations,"Gmail API (OAuth2)
+Microsoft Graph API (Outlook/OneDrive/Calendar)
+Google Calendar API
+Google Drive API","OAuth-based integrations"
+TECH_STACK,Deployment,"AWS EC2 (backend hosting)
+AWS RDS (PostgreSQL database)
+AWS ElastiCache (Redis)
+AWS S3 (database backups)
+Netlify (frontend hosting + CDN)
+Let's Encrypt (SSL certificates)
+Sentry (error tracking)","Production infrastructure"
+TEAM_STRUCTURE,Backend Lead (You),"Owns: Django setup, Auth, Gmail/Outlook OAuth, Email APIs, Tasks, Deployment
+Key Deliverables: Core backend architecture, API endpoints, AWS deployment","Lead backend development"
+TEAM_STRUCTURE,Backend Dev 2,"Owns: Database schema, Models, Celery tasks, Calendar/Drive APIs, Security
+Key Deliverables: Database design, background jobs, integrations","Support backend development"
+TEAM_STRUCTURE,Frontend Dev 1,"Owns: React setup, Auth UI, Email list/detail, Tasks, Calendar, Deployment
+Key Deliverables: Core UI components, Netlify deployment","Lead frontend development"
+TEAM_STRUCTURE,Frontend Dev 2,"Owns: Design system, Layout, Settings, UI polish, Accessibility
+Key Deliverables: Design system, all settings pages, mobile responsiveness","Support frontend development"
+TEAM_STRUCTURE,AI Developer,"Owns: OpenAI integration, Prompts, AI optimization, Monitoring
+Key Deliverables: AI service layer, quality optimization, cost monitoring","AI feature development"
+DAILY_ROUTINE,Monday Standup (30 min),"Sprint planning for the week
+Task assignment to each team member
+Identify and discuss blockers","Start week aligned"
+DAILY_ROUTINE,Wednesday Check-in (15 min),"Progress check on mid-week
+Quick blocker resolution
+Adjust tasks if needed","Mid-week sync"
+DAILY_ROUTINE,Friday Demo & Retro (45 min),"Demo working features to team
+Retrospective (what went well, what didn't)
+Plan for next week","End week with reflection"
+NEXT_5_DAYS,Day 1: Architecture Design,"Create database ERD (use dbdiagram.io)
+Draft API endpoint documentation (Swagger template)
+Finalize project folder structure","Foundation planning"
+NEXT_5_DAYS,Day 2: Architecture Review,"Review ERD with entire team
+Get feedback and finalize schema
+Document decisions","Team alignment"
+NEXT_5_DAYS,Day 3: Code Setup - Backend,"Django project + Docker Compose setup
+All backend devs have local environment running
+Push to GitHub main branch","Backend ready"
+NEXT_5_DAYS,Day 4: Code Setup - Frontend,"React + Tailwind setup
+All frontend devs have local environment running
+Push to GitHub main branch","Frontend ready"
+NEXT_5_DAYS,Day 5: Sprint Planning,"Assign Week 3 tasks to each team member
+Set up GitHub project board (or Jira/Linear)
+Set up team communication (Slack channel, daily standup time)","Ready to execute Week 3"

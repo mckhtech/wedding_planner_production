@@ -46,22 +46,20 @@ async def process_generation(
         generation.status = GenerationStatus.PROCESSING
         db_session.commit()
         
-        # ============================================
-        # FIX: Verify files exist (S3 + Local support)
-        # ============================================
+        # File validation
         if generation_mode == GenerationMode.FLEXIBLE:
             for i, path in enumerate(user_images, 1):
-                if not StorageService.file_exists(path):  # ← FIXED
+                if not StorageService.file_exists(path):
                     raise FileNotFoundError(f"User image {i} not found: {path}")
                 logger.debug(f"✓ User image {i} validated: {path}")
                 
             for i, path in enumerate(partner_images, 1):
-                if not StorageService.file_exists(path):  # ← FIXED
+                if not StorageService.file_exists(path):
                     raise FileNotFoundError(f"Partner image {i} not found: {path}")
                 logger.debug(f"✓ Partner image {i} validated: {path}")
         
         elif generation_mode == GenerationMode.COUPLE:
-            if not StorageService.file_exists(couple_image_path):  # ← FIXED
+            if not StorageService.file_exists(couple_image_path):
                 raise FileNotFoundError(f"Couple image not found: {couple_image_path}")
             logger.debug(f"✓ Couple image validated: {couple_image_path}")
         
@@ -86,13 +84,16 @@ async def process_generation(
         generation.completed_at = datetime.utcnow()
         generation.has_watermark = add_watermark
         
-        # Mark payment token as used (if paid generation)
+        # ============================================
+        # UPDATED: Use token (deduct 1 use)
+        # ============================================
         if generation.payment_token_id:
             token = db_session.query(PaymentToken).filter(
                 PaymentToken.id == generation.payment_token_id
             ).first()
             if token:
-                token.mark_as_used()
+                token.use_token()  # NEW: Deducts 1 use, auto-marks as USED when exhausted
+                logger.info(f"💳 Token {token.id} used. Remaining uses: {token.uses_remaining}/{token.uses_total}")
         
         db_session.commit()
         logger.info(f"✅ Generation {generation_id} completed successfully")
@@ -107,17 +108,25 @@ async def process_generation(
             generation.error_message = str(e)
             db_session.commit()
             
-            # REFUND if paid generation failed
+            # ============================================
+            # UPDATED: Refund logic (restore 1 use)
+            # ============================================
             if generation.payment_token_id:
                 try:
-                    PaymentService.refund_payment(
-                        generation.payment_token_id,
-                        f"Generation failed: {str(e)}",
-                        db_session
-                    )
-                    logger.info(f"💰 Payment refunded for failed generation")
+                    token = db_session.query(PaymentToken).filter(
+                        PaymentToken.id == generation.payment_token_id
+                    ).first()
+                    
+                    if token:
+                        # Restore the use
+                        token.uses_remaining += 1
+                        if token.uses_remaining > 0:
+                            token.status = TokenStatus.UNUSED  # Mark back as unused
+                        db_session.commit()
+                        logger.info(f"💰 Use restored to token {token.id}. Now: {token.uses_remaining}/{token.uses_total}")
+                        
                 except Exception as refund_error:
-                    logger.error(f"❌ Refund failed: {str(refund_error)}")
+                    logger.error(f"❌ Use restoration failed: {str(refund_error)}")
     
     finally:
         db_session.close()
@@ -211,7 +220,7 @@ async def create_generation(
         
         payment_token_id = token.id
         used_paid_token = True
-        logger.info(f"💳 PAID: Using token {token.id}")
+        logger.info(f"💳 PAID: Using token {token.id} - Uses remaining: {token.uses_remaining}/{token.uses_total}")
     
     db.commit()
     db.refresh(current_user)

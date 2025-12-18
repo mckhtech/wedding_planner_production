@@ -63,7 +63,7 @@ class Generation(Base):
     # Relationships
     user = relationship("User", back_populates="generations")
     template = relationship("Template", back_populates="generations")
-    payment_token = relationship("PaymentToken", back_populates="generation")
+    payment_token = relationship("PaymentToken", back_populates="generations")
     
     def get_all_input_image_paths(self) -> list[str]:
         """Get all input image paths for cleanup"""
