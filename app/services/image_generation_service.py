@@ -358,10 +358,39 @@ class ImageGenerationService:
             watermarked_filename = f"{uuid.uuid4()}_watermarked.png"
             watermarked_local_path = str(generated_dir / watermarked_filename)
             
+            # ============================================
+            # FIND LOGO FILE
+            # ============================================
+            logo_path = None
+            
+            # Get the absolute path to your project root
+            base_dir = Path(__file__).parent.parent.parent  # Go up from services -> app -> backend
+            
+            possible_logo_paths = [
+                base_dir / "static" / "logo.png",
+                base_dir / "static" / "favicon.png",
+                base_dir / "static" / "watermark-logo.png",
+                Path("static") / "logo.png",  # Relative path
+                Path("logo.png"),  # Current directory
+            ]
+            
+            logger.info("🔍 Searching for logo file...")
+            for path in possible_logo_paths:
+                logger.info(f"  Checking: {path} (exists: {path.exists()})")
+                if path.exists():
+                    logo_path = str(path)
+                    logger.info(f"✅ Found logo at: {logo_path}")
+                    break
+            
+            if not logo_path:
+                logger.warning("⚠️ No logo file found, using text-only watermark")
+            
+            # Add watermark (with logo if available)
             WatermarkService.add_watermark(
                 local_temp,
                 watermarked_local_path,
-                settings.WATERMARK_TEXT
+                text=settings.WATERMARK_TEXT,
+                logo_path=logo_path
             )
             
             # Upload to S3 if enabled
@@ -378,6 +407,7 @@ class ImageGenerationService:
             
         except Exception as e:
             logger.error(f"❌ Watermark addition failed: {str(e)}")
+            logger.exception("Full traceback:")
             return image_path
     
     def _create_flexible_prompt(

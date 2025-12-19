@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.generation import Generation, GenerationStatus, GenerationMode
 from app.models.template import Template
 from app.models.user import User
-from app.models.payment_token import PaymentToken
+from app.models.payment_token import PaymentToken,TokenStatus
 from app.schemas.generation import GenerationResponse, GenerationListResponse
 from app.utils.dependencies import get_current_user
 from app.services.storage_service import StorageService
@@ -291,7 +291,8 @@ async def create_generation(
         logger.info(f"📸 COUPLE mode: {couple_image_path}")
     
     # Watermark logic
-    add_watermark = not template.is_free and not current_user.is_subscribed
+    add_watermark = template.is_free and not current_user.is_subscribed
+
     
     # ============================================
     # CREATE GENERATION RECORD

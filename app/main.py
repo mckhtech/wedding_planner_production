@@ -48,7 +48,7 @@ app.add_middleware(
     #allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],
     allow_origins=[
         "https://pre-wed-ai.vercel.app",
-        "https://tactfully-unchloridized-nikolai.ngrok-free.dev",
+        "https://preweddingai.mckhtech.com",
         "http://localhost:5173"
     ],
     allow_credentials=True,
