@@ -33,7 +33,7 @@ Base.metadata.create_all(bind=engine)
 
 Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 Path(settings.GENERATED_DIR).mkdir(parents=True, exist_ok=True)
-Path(settings.TEMPLATE_PREVIEW_DIR).mkdir(parents=True, exist_ok=True)  # New directory
+Path(settings.TEMPLATE_PREVIEW_DIR).mkdir(parents=True, exist_ok=True)
 
 Path("app/templates").mkdir(parents=True, exist_ok=True)
 
@@ -43,17 +43,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# ✅ FIXED CORS - Now uses settings from .env
 app.add_middleware(
     CORSMiddleware,
     #allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],
-    allow_origins=[
-        "https://pre-wedding-ai.vercel.app",
-        "https://preweddingai.mckhtech.com",
-        "http://localhost:5173"
-    ],
+    allow_origins=settings.cors_origins,  # ← Uses ALLOWED_ORIGINS from .env
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # ← Added this
 )
 
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
@@ -109,7 +107,6 @@ async def startup_event():
         logger.info(f"Directory ready: {directory}")
     
     logger.info("🚀 Application started successfully")
-
 
 
 if __name__ == "__main__":
