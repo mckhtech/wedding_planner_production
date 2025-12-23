@@ -1,87 +1,212 @@
-from sqlalchemy import create_engine, text
-from app.config import settings
+#!/usr/bin/env python3
+"""
+Manual Migration Script
+Run this if Alembic migration hasn't been applied yet
+
+Usage:
+    python manual_migration.py
+"""
+
 import sys
+from datetime import datetime
+from sqlalchemy import create_engine, text
+from app.config import settings  # Assuming you have database URL in settings
 
-print("🔧 Fixing RDS payment_tokens table...")
-
-engine = create_engine(settings.DATABASE_URL)
-
-try:
-    with engine.begin() as conn:  # Auto-commit transaction
-        # Check if columns exist
-        result = conn.execute(text("""
+def run_migration():
+    """
+    Run migration manually using raw SQL
+    """
+    print("=" * 60)
+    print("🚀 MANUAL MIGRATION SCRIPT")
+    print("=" * 60)
+    
+    # Get database connection
+    try:
+        # Construct database URL from settings
+        DATABASE_URL = settings.DATABASE_URL
+        print(f"\n📡 Connecting to database...")
+        
+        engine = create_engine(DATABASE_URL)
+        connection = engine.connect()
+        print("✅ Connected successfully!")
+        
+    except Exception as e:
+        print(f"❌ Database connection failed: {str(e)}")
+        sys.exit(1)
+    
+    try:
+        # Start transaction
+        trans = connection.begin()
+        
+        # ============================================
+        # PART 1: Add Unlimited Credits Columns
+        # ============================================
+        print("\n" + "=" * 60)
+        print("PART 1: Adding Unlimited Credits Tracking")
+        print("=" * 60)
+        
+        # Check if columns already exist
+        result = connection.execute(text("""
             SELECT column_name 
             FROM information_schema.columns 
-            WHERE table_name = 'payment_tokens' 
-            AND column_name IN ('uses_total', 'uses_remaining', 'last_used_at');
+            WHERE table_name='users' 
+            AND column_name IN ('unlimited_free_enabled_at', 'original_free_credits')
         """))
         existing_columns = [row[0] for row in result]
         
-        print(f"📊 Existing columns: {existing_columns}")
-        
-        # Add missing columns
-        if 'uses_total' not in existing_columns:
-            print("➕ Adding uses_total column...")
-            conn.execute(text("""
-                ALTER TABLE payment_tokens 
-                ADD COLUMN uses_total INTEGER NOT NULL DEFAULT 2;
+        if 'unlimited_free_enabled_at' in existing_columns:
+            print("⏭️  Columns already exist, skipping Part 1...")
+        else:
+            print("📝 Adding 'unlimited_free_enabled_at' column...")
+            connection.execute(text("""
+                ALTER TABLE users 
+                ADD COLUMN unlimited_free_enabled_at TIMESTAMP
             """))
-        
-        if 'uses_remaining' not in existing_columns:
-            print("➕ Adding uses_remaining column...")
-            conn.execute(text("""
-                ALTER TABLE payment_tokens 
-                ADD COLUMN uses_remaining INTEGER NOT NULL DEFAULT 2;
+            print("✅ Column added!")
+            
+            print("📝 Adding 'original_free_credits' column...")
+            connection.execute(text("""
+                ALTER TABLE users 
+                ADD COLUMN original_free_credits INTEGER
             """))
+            print("✅ Column added!")
+            
+            print("📝 Updating existing users...")
+            connection.execute(text("""
+                UPDATE users 
+                SET original_free_credits = free_credits_remaining,
+                    unlimited_free_enabled_at = :now
+                WHERE original_free_credits IS NULL
+            """), {"now": datetime.utcnow()})
+            print("✅ Existing users updated!")
         
-        if 'last_used_at' not in existing_columns:
-            print("➕ Adding last_used_at column...")
-            conn.execute(text("""
-                ALTER TABLE payment_tokens 
-                ADD COLUMN last_used_at TIMESTAMP;
-            """))
+        # ============================================
+        # PART 2: Create Contacts Table
+        # ============================================
+        print("\n" + "=" * 60)
+        print("PART 2: Creating Contacts Table")
+        print("=" * 60)
         
-        # Migrate existing data
-        print("🔄 Migrating existing token data...")
-        conn.execute(text("""
-            UPDATE payment_tokens 
-            SET uses_total = 2,
-                uses_remaining = CASE 
-                    WHEN status = 'USED' THEN 0
-                    WHEN status = 'UNUSED' THEN 2
-                    WHEN status = 'REFUNDED' THEN 0
-                    ELSE 1
-                END,
-                last_used_at = CASE 
-                    WHEN used_at IS NOT NULL THEN used_at
-                    ELSE NULL
-                END
-            WHERE uses_total IS NULL OR uses_remaining IS NULL;
+        # Check if table exists
+        result = connection.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_name = 'contacts'
         """))
         
-        # Remove defaults
-        print("🧹 Removing default values...")
-        conn.execute(text("""
-            ALTER TABLE payment_tokens 
-            ALTER COLUMN uses_total DROP DEFAULT,
-            ALTER COLUMN uses_remaining DROP DEFAULT;
-        """))
+        if result.fetchone():
+            print("⏭️  Contacts table already exists, skipping Part 2...")
+        else:
+            print("📝 Creating contacts table...")
+            connection.execute(text("""
+                CREATE TABLE contacts (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR NOT NULL,
+                    email VARCHAR NOT NULL,
+                    phone VARCHAR NOT NULL,
+                    event_date VARCHAR,
+                    message TEXT,
+                    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_responded BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    admin_notes TEXT
+                )
+            """))
+            print("✅ Table created!")
+            
+            print("📝 Creating indexes...")
+            connection.execute(text("""
+                CREATE INDEX ix_contacts_id ON contacts(id)
+            """))
+            connection.execute(text("""
+                CREATE INDEX ix_contacts_email ON contacts(email)
+            """))
+            connection.execute(text("""
+                CREATE INDEX ix_contacts_created_at ON contacts(created_at)
+            """))
+            print("✅ Indexes created!")
         
-        print("✅ Database fix complete!")
+        # Commit transaction
+        trans.commit()
         
-        # Verify
-        result = conn.execute(text("""
-            SELECT column_name, data_type, column_default
+        # ============================================
+        # VERIFICATION
+        # ============================================
+        print("\n" + "=" * 60)
+        print("VERIFICATION")
+        print("=" * 60)
+        
+        # Check users table columns
+        print("\n📊 Users table columns:")
+        result = connection.execute(text("""
+            SELECT column_name, data_type 
             FROM information_schema.columns 
-            WHERE table_name = 'payment_tokens'
-            AND column_name IN ('uses_total', 'uses_remaining', 'last_used_at')
-            ORDER BY column_name;
+            WHERE table_name = 'users'
+            AND column_name IN (
+                'free_credits_remaining', 
+                'unlimited_free_enabled_at', 
+                'original_free_credits'
+            )
+            ORDER BY column_name
         """))
-        
-        print("\n📋 Final column status:")
         for row in result:
-            print(f"  ✓ {row[0]}: {row[1]} (default: {row[2]})")
+            print(f"  ✓ {row[0]}: {row[1]}")
+        
+        # Check contacts table
+        print("\n📊 Contacts table structure:")
+        result = connection.execute(text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'contacts'
+            ORDER BY ordinal_position
+        """))
+        for row in result:
+            print(f"  ✓ {row[0]}: {row[1]}")
+        
+        # Count existing data
+        result = connection.execute(text("SELECT COUNT(*) FROM users"))
+        user_count = result.fetchone()[0]
+        
+        result = connection.execute(text("SELECT COUNT(*) FROM contacts"))
+        contact_count = result.fetchone()[0]
+        
+        print(f"\n📈 Database stats:")
+        print(f"  Users: {user_count}")
+        print(f"  Contacts: {contact_count}")
+        
+        print("\n" + "=" * 60)
+        print("✅ MIGRATION COMPLETED SUCCESSFULLY!")
+        print("=" * 60)
+        print("\nWhat's enabled now:")
+        print("  1. ✨ Users can generate UNLIMITED free templates")
+        print("  2. 📧 Contact form can receive inquiries")
+        print("  3. 📊 Historical credit data preserved")
+        print("\nNext steps:")
+        print("  1. Restart your backend server")
+        print("  2. Test free template generation (should work unlimited times)")
+        print("  3. Test contact form submission")
+        print("  4. Check admin panel for contact inquiries")
+        print("=" * 60)
+        
+    except Exception as e:
+        print(f"\n❌ Migration failed: {str(e)}")
+        trans.rollback()
+        sys.exit(1)
+        
+    finally:
+        connection.close()
+        engine.dispose()
 
-except Exception as e:
-    print(f"❌ Error: {e}")
-    sys.exit(1)
+
+if __name__ == "__main__":
+    print("\n⚠️  WARNING: This will modify your database!")
+    print("Make sure you have a backup before proceeding.\n")
+    
+    response = input("Continue with migration? (yes/no): ").strip().lower()
+    
+    if response == 'yes':
+        run_migration()
+    else:
+        print("\n❌ Migration cancelled.")
+        sys.exit(0)

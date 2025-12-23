@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.database import engine, Base, check_db_connection, get_pool_status
-from app.api import auth, templates, generation, admin, test, payment, test_payment
+from app.api import auth, templates, generation, admin, test, payment, test_payment, contact
 import app.models
 
 # ============================================
@@ -47,7 +47,7 @@ app.add_middleware(
     CORSMiddleware,
     #allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],
     allow_origins=[
-        "https://pre-wed-ai.vercel.app",
+        "https://pre-wedding-ai.vercel.app",
         "https://preweddingai.mckhtech.com",
         "http://localhost:5173"
     ],
@@ -67,6 +67,7 @@ app.include_router(admin.router)
 app.include_router(payment.router)
 app.include_router(test.router)
 app.include_router(test_payment.router)
+app.include_router(contact.router)
 
 
 @app.exception_handler(Exception)
@@ -113,4 +114,5 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
+    #uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

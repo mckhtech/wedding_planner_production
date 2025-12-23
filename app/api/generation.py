@@ -85,14 +85,14 @@ async def process_generation(
         generation.has_watermark = add_watermark
         
         # ============================================
-        # UPDATED: Use token (deduct 1 use)
+        # UPDATED: Use token (deduct 1 use) - PAID TEMPLATES ONLY
         # ============================================
         if generation.payment_token_id:
             token = db_session.query(PaymentToken).filter(
                 PaymentToken.id == generation.payment_token_id
             ).first()
             if token:
-                token.use_token()  # NEW: Deducts 1 use, auto-marks as USED when exhausted
+                token.use_token()  # Deducts 1 use, auto-marks as USED when exhausted
                 logger.info(f"💳 Token {token.id} used. Remaining uses: {token.uses_remaining}/{token.uses_total}")
         
         db_session.commit()
@@ -109,7 +109,7 @@ async def process_generation(
             db_session.commit()
             
             # ============================================
-            # UPDATED: Refund logic (restore 1 use)
+            # UPDATED: Refund logic (restore 1 use) - PAID TEMPLATES ONLY
             # ============================================
             if generation.payment_token_id:
                 try:
@@ -154,6 +154,8 @@ async def create_generation(
     
     - FLEXIBLE: 1-3 user images + 1-3 partner images (auto-detect count)
     - COUPLE: 1 image with both people together
+    
+    ✨ NEW: FREE TEMPLATES = UNLIMITED GENERATIONS (no credit checks)
     """
     
     # Validate generation mode
@@ -174,33 +176,41 @@ async def create_generation(
         )
     
     # ============================================
-    # ACCESS CONTROL
+    # ACCESS CONTROL - UPDATED FOR UNLIMITED FREE
     # ============================================
     payment_token_id = None
     used_free_credit = False
     used_paid_token = False
     
     if template.is_free:
-        if not current_user.can_generate_with_free_template():
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "error": "insufficient_credits",
-                    "message": "No free credits remaining.",
-                    "free_credits_remaining": current_user.free_credits_remaining
-                }
-            )
+        # ✅ NEW BEHAVIOR: No credit checks, unlimited generations!
+        logger.info(f"✨ FREE TEMPLATE: User {current_user.id} generating without credit limits")
+        used_free_credit = True  # Track that this was a free generation
         
-        if not current_user.deduct_free_credit():
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Failed to deduct credit"
-            )
+        # ============================================
+        # OLD LOGIC (COMMENTED OUT FOR REFERENCE)
+        # ============================================
+        # if not current_user.can_generate_with_free_template():
+        #     raise HTTPException(
+        #         status_code=status.HTTP_403_FORBIDDEN,
+        #         detail={
+        #             "error": "insufficient_credits",
+        #             "message": "No free credits remaining.",
+        #             "free_credits_remaining": current_user.free_credits_remaining
+        #         }
+        #     )
         
-        used_free_credit = True
-        logger.info(f"💳 FREE: Credit deducted. User {current_user.id} has {current_user.free_credits_remaining} credits")
+        # if not current_user.deduct_free_credit():
+        #     raise HTTPException(
+        #         status_code=status.HTTP_403_FORBIDDEN,
+        #         detail="Failed to deduct credit"
+        #     )
+        
+        # used_free_credit = True
+        # logger.info(f"💳 FREE: Credit deducted. User {current_user.id} has {current_user.free_credits_remaining} credits")
         
     else:
+        # 💰 PAID TEMPLATES: Still require payment tokens (unchanged)
         if not current_user.can_generate_with_paid_template(template_id):
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -290,9 +300,8 @@ async def create_generation(
         couple_image_path = await StorageService.save_upload_file(couple_image, "uploads")
         logger.info(f"📸 COUPLE mode: {couple_image_path}")
     
-    # Watermark logic
+    # Watermark logic (UNCHANGED - free templates still get watermarks for non-subscribed users)
     add_watermark = template.is_free and not current_user.is_subscribed
-
     
     # ============================================
     # CREATE GENERATION RECORD

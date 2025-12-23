@@ -8,6 +8,11 @@ class GenerationCreate(BaseModel):
     generation_mode: GenerationMode = GenerationMode.FLEXIBLE
 
 class GenerationResponse(BaseModel):
+    """
+    Generation response schema
+    
+    ✨ UPDATED: No credit-related fields in response
+    """
     id: int
     template_id: int
     generation_mode: GenerationMode
@@ -27,7 +32,14 @@ class GenerationResponse(BaseModel):
     status: GenerationStatus
     error_message: Optional[str] = None
     has_watermark: bool
-    was_free_generation: bool
+    
+    # ============================================
+    # UPDATED: Simplified generation type tracking
+    # ============================================
+    was_free_generation: bool  # True if used a free template
+    
+    # REMOVED: used_free_credit (no longer relevant)
+    # REMOVED: used_paid_token (internal detail, not needed in response)
     
     created_at: datetime
     completed_at: Optional[datetime] = None
@@ -116,3 +128,13 @@ class GenerationStatusUpdate(BaseModel):
     status: GenerationStatus
     generated_image_path: Optional[str] = None
     error_message: Optional[str] = None
+
+
+# ============================================
+# OLD SCHEMA (COMMENTED FOR REFERENCE)
+# ============================================
+# class GenerationResponse(BaseModel):
+#     """OLD VERSION - Had credit tracking fields"""
+#     # ... other fields ...
+#     used_free_credit: bool  # ❌ Removed
+#     used_paid_token: bool   # ❌ Removed (internal detail)
