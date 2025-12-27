@@ -5,38 +5,76 @@ from app.schemas.auth import Token, LoginRequest, GoogleAuthRequest
 from app.schemas.user import UserCreate, UserResponse
 from app.services.auth_service import AuthService
 from app.utils.dependencies import get_current_user
+from app.utils.validators import sanitize_login_input, validate_email
 from app.models.user import User
 from app.models.payment_token import PaymentToken, TokenStatus, PaymentStatus
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user with email and password"""
-    user = AuthService.register_user(db, user_data)
-    return user
+    try:
+        # Validate email
+        user_data.email = validate_email(user_data.email)
+        
+        user = AuthService.register_user(db, user_data)
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Registration failed"
+        )
 
 @router.post("/login", response_model=Token)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """Login with email and password"""
-    user = AuthService.authenticate_user(db, login_data.email, login_data.password)
-    access_token = AuthService.create_token(user)
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    try:
+        # Sanitize and validate inputs
+        email, password = sanitize_login_input(login_data.email, login_data.password)
+        
+        user = AuthService.authenticate_user(db, email, password)
+        access_token = AuthService.create_token(user)
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        # Don't expose internal errors
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials"
+        )
 
 @router.post("/google", response_model=Token)
 async def google_auth(auth_data: GoogleAuthRequest, db: Session = Depends(get_db)):
     """Authenticate with Google OAuth"""
-    user = AuthService.authenticate_google(db, auth_data.token)
-    access_token = AuthService.create_token(user)
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    try:
+        user = AuthService.authenticate_google(db, auth_data.token)
+        access_token = AuthService.create_token(user)
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Google auth error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed"
+        )
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -48,18 +86,12 @@ async def verify_token(current_user: User = Depends(get_current_user)):
     """Verify if token is valid"""
     return {"valid": True, "user_id": current_user.id}
 
-# ============================================
-# NEW: USER CREDIT & TOKEN INFO
-# ============================================
-
 @router.get("/me/credits")
 async def get_user_credits(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Get detailed credit and token information for current user
-    """
+    """Get detailed credit and token information for current user"""
     
     # Count unused paid tokens
     unused_tokens = db.query(PaymentToken).filter(
