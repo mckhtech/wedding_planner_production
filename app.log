@@ -2931,3 +2931,5 @@
 2025-12-23 07:39:00,258 - app.services.auth_service - INFO - Google token verified for email: akshatjingar2404@gmail.com
 2025-12-23 07:39:00,265 - app.services.auth_service - INFO - Existing Google user logged in: akshatjingar2404@gmail.com
 2025-12-23 07:39:00,266 - app.services.auth_service - INFO - Access token created for user: akshatjingar2404@gmail.com
+2025-12-27 12:36:02,026 - app.services.auth_service - INFO - User authenticated successfully: user8@example.com
+2025-12-27 12:36:02,048 - app.services.auth_service - INFO - Access token created for user: user8@example.com
