@@ -24,9 +24,9 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     
     # ============================================
-    # CREDIT SYSTEM (KEPT FOR HISTORICAL DATA)
+    # CREDIT SYSTEM - RESTORED TO 5 CREDITS
     # ============================================
-    free_credits_remaining = Column(Integer, default=2)  # Kept for backward compatibility
+    free_credits_remaining = Column(Integer, default=5)  # ✅ RESTORED: 5 free credits
     
     # Subscription info
     is_subscribed = Column(Boolean, default=False)
@@ -41,51 +41,62 @@ class User(Base):
     payment_tokens = relationship("PaymentToken", back_populates="user", cascade="all, delete-orphan")
     
     # ============================================
-    # HELPER METHODS - UPDATED FOR UNLIMITED FREE GENERATIONS
+    # HELPER METHODS - RESTORED CREDIT LOGIC
     # ============================================
     
     @property
     def credits_remaining(self):
-        """Backward compatibility - returns free credits (historical only)"""
+        """Returns current free credits remaining"""
         return self.free_credits_remaining
     
     def can_generate_with_free_template(self) -> bool:
         """
         Check if user can generate with a FREE template
         
-        NEW BEHAVIOR: Always returns True (unlimited generations)
+        Rules:
+        - Subscribed users: UNLIMITED (always True)
+        - Non-subscribed users: Requires at least 1 credit
         """
-        return True  # ✅ UNLIMITED FREE GENERATIONS
+        # Subscribed users get unlimited free generations
+        if self.is_subscribed:
+            return True
         
-        # ============================================
-        # OLD LOGIC (COMMENTED OUT FOR REFERENCE)
-        # ============================================
-        # """
-        # Check if user can generate with a FREE template
-        # Requires: At least 1 free credit remaining
-        # """
-        # return self.free_credits_remaining > 0
+        # Non-subscribed users need credits
+        return self.free_credits_remaining > 0
     
     def deduct_free_credit(self) -> bool:
         """
         Deduct one free credit from user
         
-        NEW BEHAVIOR: Always returns True without deducting anything
-        (Keeps the method for backward compatibility but doesn't deduct credits)
-        """
-        return True  # ✅ NO DEDUCTION, UNLIMITED GENERATIONS
+        Rules:
+        - Subscribed users: NO DEDUCTION (unlimited)
+        - Non-subscribed users: Deduct 1 credit
         
-        # ============================================
-        # OLD LOGIC (COMMENTED OUT FOR REFERENCE)
-        # ============================================
-        # """
-        # Deduct one free credit from user
-        # Returns True if successful, False if no credits remaining
-        # """
-        # if self.free_credits_remaining <= 0:
-        #     return False
-        # self.free_credits_remaining -= 1
-        # return True
+        Returns True if successful, False if no credits remaining
+        """
+        # Subscribed users don't consume credits
+        if self.is_subscribed:
+            return True
+        
+        # Check if user has credits
+        if self.free_credits_remaining <= 0:
+            return False
+        
+        # Deduct credit
+        self.free_credits_remaining -= 1
+        return True
+    
+    def refund_free_credit(self) -> None:
+        """
+        Refund one free credit to user (on generation failure)
+        
+        Rules:
+        - Subscribed users: NO REFUND (they don't consume credits)
+        - Non-subscribed users: Restore 1 credit
+        """
+        # Only refund to non-subscribed users who actually used a credit
+        if not self.is_subscribed:
+            self.free_credits_remaining += 1
     
     def can_generate_with_paid_template(self, template_id: int) -> bool:
         """

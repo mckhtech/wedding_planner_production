@@ -91,7 +91,11 @@ async def get_user_credits(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get detailed credit and token information for current user"""
+    """
+    Get detailed credit and token information for current user
+    
+    ✅ RESTORED: Shows credit balance and subscription status
+    """
     
     # Count unused paid tokens
     unused_tokens = db.query(PaymentToken).filter(
@@ -108,16 +112,24 @@ async def get_user_credits(
         tokens_by_template[token.template_id].append({
             "token_id": token.id,
             "amount_paid": float(token.amount_paid),
+            "uses_remaining": token.uses_remaining,
+            "uses_total": token.uses_total,
             "created_at": token.created_at.isoformat()
         })
+    
+    # Determine user status message
+    if current_user.is_subscribed:
+        status_message = "You have unlimited free generations (subscribed)"
+    else:
+        status_message = f"You have {current_user.free_credits_remaining} free generations remaining"
     
     return {
         "user_id": current_user.id,
         "email": current_user.email,
         "free_credits_remaining": current_user.free_credits_remaining,
         "is_subscribed": current_user.is_subscribed,
-        "can_generate_free": current_user.free_credits_remaining > 0,
+        "can_generate_free": current_user.can_generate_with_free_template(),
         "unused_paid_tokens": len(unused_tokens),
         "tokens_by_template": tokens_by_template,
-        "message": f"You have {current_user.free_credits_remaining} free generations remaining"
+        "message": status_message
     }

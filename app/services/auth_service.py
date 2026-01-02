@@ -16,12 +16,14 @@ class AuthService:
         """
         Register a new user with email/password authentication
         
+        ✅ UPDATED: New users get 5 free credits
+        
         Args:
             db: Database session
             user_data: User registration data
             
         Returns:
-            User: Newly created user object
+            User: Newly created user object with 5 free credits
             
         Raises:
             HTTPException: If email already exists
@@ -36,21 +38,22 @@ class AuthService:
                     detail="Email already registered"
                 )
             
-            # Create new user
+            # Create new user with 5 free credits
             hashed_password = get_password_hash(user_data.password)
             new_user = User(
                 email=user_data.email,
                 full_name=user_data.full_name,
                 hashed_password=hashed_password,
                 auth_provider=AuthProvider.EMAIL,
-                is_verified=False
+                is_verified=False,
+                free_credits_remaining=5  # ✅ NEW: 5 free credits for new users
             )
             
             db.add(new_user)
             db.commit()
             db.refresh(new_user)
             
-            logger.info(f"New user registered: {new_user.email} (ID: {new_user.id})")
+            logger.info(f"✨ New user registered: {new_user.email} (ID: {new_user.id}) with 5 free credits")
             return new_user
             
         except HTTPException:
@@ -110,7 +113,7 @@ class AuthService:
                     detail="Account is inactive"
                 )
             
-            logger.info(f"User authenticated successfully: {email}")
+            logger.info(f"User authenticated successfully: {email} (Credits: {user.free_credits_remaining})")
             return user
             
         except HTTPException:
@@ -126,6 +129,8 @@ class AuthService:
     def authenticate_google(db: Session, google_token: str) -> User:
         """
         Authenticate or register user via Google OAuth
+        
+        ✅ UPDATED: New Google users get 5 free credits
         
         Args:
             db: Database session
@@ -172,21 +177,22 @@ class AuthService:
                 user.profile_picture = picture
                 db.commit()
                 db.refresh(user)
-                logger.info(f"Existing Google user logged in: {email}")
+                logger.info(f"Existing Google user logged in: {email} (Credits: {user.free_credits_remaining})")
             else:
-                # Create new user
+                # Create new user with 5 free credits
                 user = User(
                     email=email,
                     full_name=full_name,
                     google_id=google_id,
                     auth_provider=AuthProvider.GOOGLE,
                     profile_picture=picture,
-                    is_verified=True  # Google accounts are pre-verified
+                    is_verified=True,  # Google accounts are pre-verified
+                    free_credits_remaining=5  # ✅ NEW: 5 free credits for new Google users
                 )
                 db.add(user)
                 db.commit()
                 db.refresh(user)
-                logger.info(f"New Google user created: {email} (ID: {user.id})")
+                logger.info(f"✨ New Google user created: {email} (ID: {user.id}) with 5 free credits")
             
             return user
             

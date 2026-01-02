@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.generation import Generation, GenerationStatus, GenerationMode
 from app.models.template import Template
 from app.models.user import User
-from app.models.payment_token import PaymentToken,TokenStatus
+from app.models.payment_token import PaymentToken, TokenStatus
 from app.schemas.generation import GenerationResponse, GenerationListResponse
 from app.utils.dependencies import get_current_user
 from app.services.storage_service import StorageService
@@ -85,7 +85,7 @@ async def process_generation(
         generation.has_watermark = add_watermark
         
         # ============================================
-        # UPDATED: Use token (deduct 1 use) - PAID TEMPLATES ONLY
+        # Use token (deduct 1 use) - PAID TEMPLATES ONLY
         # ============================================
         if generation.payment_token_id:
             token = db_session.query(PaymentToken).filter(
@@ -109,8 +109,21 @@ async def process_generation(
             db_session.commit()
             
             # ============================================
-            # UPDATED: Refund logic (restore 1 use) - PAID TEMPLATES ONLY
+            # REFUND LOGIC - BOTH FREE CREDITS AND PAID TOKENS
             # ============================================
+            
+            # Refund FREE CREDIT if used
+            if generation.used_free_credit:
+                try:
+                    user = db_session.query(User).filter(User.id == generation.user_id).first()
+                    if user:
+                        user.refund_free_credit()
+                        db_session.commit()
+                        logger.info(f"💰 Free credit refunded to user {user.id}. New balance: {user.free_credits_remaining}")
+                except Exception as refund_error:
+                    logger.error(f"❌ Free credit refund failed: {str(refund_error)}")
+            
+            # Refund PAID TOKEN use if used
             if generation.payment_token_id:
                 try:
                     token = db_session.query(PaymentToken).filter(
@@ -126,7 +139,7 @@ async def process_generation(
                         logger.info(f"💰 Use restored to token {token.id}. Now: {token.uses_remaining}/{token.uses_total}")
                         
                 except Exception as refund_error:
-                    logger.error(f"❌ Use restoration failed: {str(refund_error)}")
+                    logger.error(f"❌ Token use restoration failed: {str(refund_error)}")
     
     finally:
         db_session.close()
@@ -155,7 +168,7 @@ async def create_generation(
     - FLEXIBLE: 1-3 user images + 1-3 partner images (auto-detect count)
     - COUPLE: 1 image with both people together
     
-    ✨ NEW: FREE TEMPLATES = UNLIMITED GENERATIONS (no credit checks)
+    ✅ RESTORED: 5 free credits per user (subscribed = unlimited)
     """
     
     # Validate generation mode
@@ -176,41 +189,37 @@ async def create_generation(
         )
     
     # ============================================
-    # ACCESS CONTROL - UPDATED FOR UNLIMITED FREE
+    # ACCESS CONTROL - RESTORED CREDIT SYSTEM
     # ============================================
     payment_token_id = None
     used_free_credit = False
     used_paid_token = False
     
     if template.is_free:
-        # ✅ NEW BEHAVIOR: No credit checks, unlimited generations!
-        logger.info(f"✨ FREE TEMPLATE: User {current_user.id} generating without credit limits")
-        used_free_credit = True  # Track that this was a free generation
+        # ✅ FREE TEMPLATE: Check credit availability
+        if not current_user.can_generate_with_free_template():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "insufficient_credits",
+                    "message": "No free credits remaining. Subscribe for unlimited generations or purchase credits.",
+                    "free_credits_remaining": current_user.free_credits_remaining,
+                    "is_subscribed": current_user.is_subscribed
+                }
+            )
         
-        # ============================================
-        # OLD LOGIC (COMMENTED OUT FOR REFERENCE)
-        # ============================================
-        # if not current_user.can_generate_with_free_template():
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail={
-        #             "error": "insufficient_credits",
-        #             "message": "No free credits remaining.",
-        #             "free_credits_remaining": current_user.free_credits_remaining
-        #         }
-        #     )
+        # Deduct credit (subscribed users won't actually deduct)
+        if not current_user.deduct_free_credit():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Failed to deduct credit"
+            )
         
-        # if not current_user.deduct_free_credit():
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail="Failed to deduct credit"
-        #     )
-        
-        # used_free_credit = True
-        # logger.info(f"💳 FREE: Credit deducted. User {current_user.id} has {current_user.free_credits_remaining} credits")
+        used_free_credit = True
+        logger.info(f"💳 FREE: Credit deducted. User {current_user.id} has {current_user.free_credits_remaining} credits (subscribed: {current_user.is_subscribed})")
         
     else:
-        # 💰 PAID TEMPLATES: Still require payment tokens (unchanged)
+        # 💰 PAID TEMPLATES: Require payment tokens (unchanged)
         if not current_user.can_generate_with_paid_template(template_id):
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -300,7 +309,7 @@ async def create_generation(
         couple_image_path = await StorageService.save_upload_file(couple_image, "uploads")
         logger.info(f"📸 COUPLE mode: {couple_image_path}")
     
-    # Watermark logic (UNCHANGED - free templates still get watermarks for non-subscribed users)
+    # Watermark logic (free templates get watermarks for non-subscribed users)
     add_watermark = template.is_free and not current_user.is_subscribed
     
     # ============================================
